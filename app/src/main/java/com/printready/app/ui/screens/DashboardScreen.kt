@@ -328,7 +328,7 @@ private fun RecentPrintItem(
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "${job.pageCount} page · ${formatSize(job.fileSizeBytes)}",
+                "${job.pageCount} page · ${formatSize(job.fileSizeBytes)} · ${formatDate(job.createdAt)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = OnSurfaceVariant
             )
@@ -383,4 +383,9 @@ private fun RecentPrintItem(
 private fun formatSize(bytes: Long): String {
     if (bytes == 0L) return "--"
     return if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}
+
+private fun formatDate(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(timestamp))
 }
