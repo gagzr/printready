@@ -327,6 +327,20 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateItemScaleAndPosition(itemId: String, scaleFactor: Float, offsetXMm: Float, offsetYMm: Float) {
+        _workspaceState.update { state ->
+            state.copy(items = state.items.map {
+                if (it.id == itemId) {
+                    it.copy(
+                        scaleFactor = scaleFactor.coerceIn(0.4f, 3.0f),
+                        offsetXMm = offsetXMm,
+                        offsetYMm = offsetYMm
+                    )
+                } else it
+            })
+        }
+    }
+
     fun renameRecentJob(jobId: String, newTitle: String) {
         _dashboardState.update { ds ->
             ds.copy(recentJobs = ds.recentJobs.map {
