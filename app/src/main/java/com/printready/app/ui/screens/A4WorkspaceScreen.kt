@@ -131,13 +131,42 @@ fun A4WorkspaceScreen(
 
     // Auto-launch the appropriate picker if coming from dashboard fresh
     LaunchedEffect(Unit) {
-        if (state.items.isEmpty()) {
+        if (state.items.all { it.imageUri == null }) {
             if (sourceMode == "upload") {
                 imagePickerLauncher.launch("image/*")
             } else if (sourceMode == "scan") {
                 startMlKitScan()
             }
         }
+    }
+
+    var showAddSourceDialogForId by remember { mutableStateOf<String?>(null) }
+
+    if (showAddSourceDialogForId != null) {
+        val id = showAddSourceDialogForId!!
+        AlertDialog(
+            onDismissRequest = { showAddSourceDialogForId = null },
+            title = { Text("Add Image") },
+            text = { Text("Choose a source for your image.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingActionItemId = id
+                    startMlKitScan()
+                    showAddSourceDialogForId = null
+                }) {
+                    Text("Scan with Camera")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    pendingActionItemId = id
+                    imagePickerLauncher.launch("image/*")
+                    showAddSourceDialogForId = null
+                }) {
+                    Text("Upload from Gallery")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -204,7 +233,14 @@ fun A4WorkspaceScreen(
                     selectedItemId = state.selectedItemId,
                     multiCard = multiCard,
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
-                    onItemSelected = { id -> viewModel.selectItem(id) },
+                    onItemSelected = { id ->
+                        val item = state.items.find { it.id == id }
+                        if (item?.imageUri == null) {
+                            showAddSourceDialogForId = id
+                        } else {
+                            viewModel.selectItem(id)
+                        }
+                    },
                     onAddImage = { startMlKitScan() },
                     onCropClicked = { id, uri ->
                         val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
@@ -303,20 +339,6 @@ private fun A4CanvasSheet(
 
         // Dashed margin guide
         DashedMarginGuide()
-
-        if (items.isEmpty()) {
-            // Empty state — tap to add
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .clickableNoPull(onClick = onAddImage)
-            ) {
-                Icon(Icons.Default.Add, null, tint = OnSurfaceVariant, modifier = Modifier.size(32.dp))
-                Text("Tap to add image", style = MaterialTheme.typography.bodyMedium, color = OnSurfaceVariant)
-            }
-        }
 
         val density = LocalDensity.current
         items.forEach { item ->
