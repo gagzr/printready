@@ -24,7 +24,9 @@ data class WorkspaceUiState(
     val isMultiCard: Boolean = false,
     val pdfGenerating: Boolean = false,
     val pdfFile: File? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false
 )
 
 data class DashboardUiState(
@@ -45,7 +47,78 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     private val _selectedDocType = MutableStateFlow<DocumentType?>(null)
     val selectedDocType: StateFlow<DocumentType?> = _selectedDocType.asStateFlow()
 
+    private val undoStack = java.util.ArrayDeque<List<CanvasItem>>()
+    private val redoStack = java.util.ArrayDeque<List<CanvasItem>>()
+
+    private fun pushUndoSnapshot() {
+        val currentItems = _workspaceState.value.items
+        if (currentItems.isNotEmpty()) {
+            undoStack.push(currentItems)
+            redoStack.clear()
+            updateUndoRedoFlags()
+        }
+    }
+
+    private fun updateUndoRedoFlags() {
+        _workspaceState.update {
+            it.copy(
+                canUndo = undoStack.isNotEmpty(),
+                canRedo = redoStack.isNotEmpty()
+            )
+        }
+    }
+
+    fun undo() {
+        if (undoStack.isEmpty()) return
+        val previousItems = undoStack.pop()
+        redoStack.push(_workspaceState.value.items)
+        _workspaceState.update { state ->
+            state.copy(
+                items = previousItems,
+                canUndo = undoStack.isNotEmpty(),
+                canRedo = redoStack.isNotEmpty()
+            )
+        }
+    }
+
+    fun redo() {
+        if (redoStack.isEmpty()) return
+        val nextItems = redoStack.pop()
+        undoStack.push(_workspaceState.value.items)
+        _workspaceState.update { state ->
+            state.copy(
+                items = nextItems,
+                canUndo = undoStack.isNotEmpty(),
+                canRedo = redoStack.isNotEmpty()
+            )
+        }
+    }
+
+    fun resetLayout() {
+        val docType = _workspaceState.value.selectedDocType ?: return
+        val marginMm = _workspaceState.value.marginPreset.mm
+        if (_workspaceState.value.items.isEmpty()) return
+
+        pushUndoSnapshot()
+
+        _workspaceState.update { state ->
+            val resetItems = state.items.mapIndexed { index, item ->
+                val (defaultX, defaultY) = calculateSkeletonPosition(index, state.items.size, item.documentType, marginMm)
+                item.copy(
+                    offsetXMm = defaultX,
+                    offsetYMm = defaultY,
+                    scaleFactor = 1f,
+                    rotationDeg = 0f
+                    // imageUri is strictly PRESERVED
+                )
+            }
+            state.copy(items = resetItems)
+        }
+    }
+
     fun clearWorkspace() {
+        undoStack.clear()
+        redoStack.clear()
         _workspaceState.value = WorkspaceUiState()
         _selectedDocType.value = null
     }
@@ -86,6 +159,8 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun selectDocumentType(type: DocumentType) {
+        undoStack.clear()
+        redoStack.clear()
         _selectedDocType.value = type
         val currentMargin = _workspaceState.value.marginPreset.mm
 
@@ -100,7 +175,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
             )
         }
 
-        _workspaceState.update { it.copy(selectedDocType = type, items = initialItems, selectedItemId = null) }
+        _workspaceState.update { it.copy(selectedDocType = type, items = initialItems, selectedItemId = null, canUndo = false, canRedo = false) }
     }
 
     fun selectItem(itemId: String?) {
@@ -108,8 +183,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun addImageToCanvas(uri: Uri) {
-        // If there's a selected item that is empty or we are replacing it, we could target it, but let's just find the first empty placeholder natively.
-        // OR add it at the end if none are empty.
+        pushUndoSnapshot()
         _workspaceState.update { s ->
             val firstEmptyIndex = s.items.indexOfFirst { it.imageUri == null }
             if (firstEmptyIndex != -1) {
@@ -117,7 +191,6 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
                 newItems[firstEmptyIndex] = newItems[firstEmptyIndex].copy(imageUri = uri)
                 s.copy(items = newItems)
             } else {
-                // All full, behavior: either append (multiCard) or replace first depending on logic.
                 if (s.isMultiCard) {
                      val docType = s.selectedDocType ?: DefaultDocumentTypes.first()
                      val itemsCount = s.items.size
@@ -131,10 +204,14 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
                      )
                      s.copy(items = s.items + item)
                 } else {
-                     s // No room to add globally unless multiCard is true.
+                     s
                 }
             }
         }
+    }
+
+    fun pushUndoSnapshotForDrag() {
+        pushUndoSnapshot()
     }
 
     fun updateItemPosition(itemId: String, offsetXMm: Float, offsetYMm: Float) {
@@ -146,6 +223,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun setMargin(preset: MarginPreset) {
+        pushUndoSnapshot()
         _workspaceState.update { state ->
             val updatedItems = state.items.mapIndexed { index, item ->
                 val (newX, newY) = calculateSkeletonPosition(index, state.items.size, item.documentType, preset.mm)
@@ -207,6 +285,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         val docType = _workspaceState.value.selectedDocType ?: return
         val marginMm = _workspaceState.value.marginPreset.mm
 
+        pushUndoSnapshot()
         _workspaceState.update { state ->
             state.copy(items = state.items.mapIndexed { index, item ->
                 val (newX, newY) = calculateSkeletonPosition(index, state.items.size, item.documentType, marginMm)
@@ -220,6 +299,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateItemUri(itemId: String, uri: Uri) {
+        pushUndoSnapshot()
         _workspaceState.update { state ->
             state.copy(items = state.items.map {
                 if (it.id == itemId) it.copy(imageUri = uri) else it
