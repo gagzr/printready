@@ -12,9 +12,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import android.widget.Toast
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +47,25 @@ fun DashboardScreen(
     onRecentJobClick: (PrintJob) -> Unit
 ) {
     val dashState by viewModel.dashboardState.collectAsState()
-    var selectedNavIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+
+    var renamingJob by remember { mutableStateOf<PrintJob?>(null) }
+    var renameText by remember { mutableStateOf("") }
+
+    val handlePrintShare: (PrintJob) -> Unit = { job ->
+        val filePath = job.pdfFilePath
+        if (filePath != null && File(filePath).exists()) {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(filePath))
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share/Print PDF"))
+        } else {
+            Toast.makeText(context, "PDF file not found. Open in workspace to regenerate.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -141,9 +166,51 @@ fun DashboardScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 dashState.recentJobs.forEach { job ->
-                    RecentPrintItem(job = job, onClick = { onRecentJobClick(job) })
+                    RecentPrintItem(
+                        job = job,
+                        onEdit = { onRecentJobClick(job) },
+                        onPrintShare = { handlePrintShare(job) },
+                        onRename = {
+                            renamingJob = job
+                            renameText = job.title
+                        },
+                        onDelete = { viewModel.deleteRecentJob(job.id) }
+                    )
                     Spacer(Modifier.height(8.dp))
                 }
+            }
+
+            renamingJob?.let { job ->
+                AlertDialog(
+                    onDismissRequest = { renamingJob = null },
+                    title = { Text("Rename Print Job", style = MaterialTheme.typography.headlineSmall) },
+                    text = {
+                        OutlinedTextField(
+                            value = renameText,
+                            onValueChange = { renameText = it },
+                            label = { Text("Title") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (renameText.isNotBlank()) {
+                                    viewModel.renameRecentJob(job.id, renameText.trim())
+                                }
+                                renamingJob = null
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { renamingJob = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
             Spacer(Modifier.height(80.dp))
@@ -212,14 +279,22 @@ private fun PresetChip(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RecentPrintItem(job: PrintJob, onClick: () -> Unit) {
+private fun RecentPrintItem(
+    job: PrintJob,
+    onEdit: () -> Unit,
+    onPrintShare: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(SurfaceContainerLowest)
             .border(1.dp, OutlineVariant, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .clickable(onClick = onEdit)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -258,7 +333,50 @@ private fun RecentPrintItem(job: PrintJob, onClick: () -> Unit) {
                 color = OnSurfaceVariant
             )
         }
-        // Removed non-functional Settings icon here
+
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = OnSurfaceVariant)
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Print / Share") },
+                    leadingIcon = { Icon(Icons.Default.Share, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onPrintShare()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Default.Create, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = Error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = Error) },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
+                )
+            }
+        }
     }
 }
 

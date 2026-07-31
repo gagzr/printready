@@ -276,7 +276,8 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
                 title = state.selectedDocType?.name ?: "Document",
                 documentType = state.selectedDocType ?: DefaultDocumentTypes.first(),
                 items = state.items,
-                marginMm = state.marginPreset.mm
+                marginMm = state.marginPreset.mm,
+                pdfFilePath = outFile.absolutePath
             )
 
             val result = generatePdf.execute(job, outFile)
@@ -284,7 +285,7 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
             _workspaceState.update { s ->
                 result.fold(
                     onSuccess = { file ->
-                        val updatedJob = job.copy(fileSizeBytes = file.length())
+                        val updatedJob = job.copy(fileSizeBytes = file.length(), pdfFilePath = file.absolutePath)
                         _dashboardState.update { ds -> ds.copy(recentJobs = listOf(updatedJob) + ds.recentJobs) }
                         s.copy(pdfGenerating = false, pdfFile = file)
                     },
@@ -323,6 +324,24 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
             state.copy(items = state.items.map {
                 if (it.id == itemId) it.copy(imageUri = uri) else it
             })
+        }
+    }
+
+    fun renameRecentJob(jobId: String, newTitle: String) {
+        _dashboardState.update { ds ->
+            ds.copy(recentJobs = ds.recentJobs.map {
+                if (it.id == jobId) it.copy(title = newTitle) else it
+            })
+        }
+    }
+
+    fun deleteRecentJob(jobId: String) {
+        _dashboardState.update { ds ->
+            val jobToDelete = ds.recentJobs.find { it.id == jobId }
+            jobToDelete?.pdfFilePath?.let { path ->
+                try { File(path).delete() } catch (_: Exception) {}
+            }
+            ds.copy(recentJobs = ds.recentJobs.filter { it.id != jobId })
         }
     }
 }
