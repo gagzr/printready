@@ -34,6 +34,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil.compose.AsyncImage
 import com.printready.app.domain.model.*
 import com.printready.app.ui.theme.*
@@ -460,13 +461,11 @@ private fun A4CanvasSheet(
 
         val density = LocalDensity.current
         val totalItems = items.size
-        items.forEachIndexed { index, item ->
-            val scaleW = canvasSize.width / A4.WIDTH_MM
-            val scaleH = canvasSize.height / A4.HEIGHT_MM
-            val xPx = (item.offsetXMm * scaleW).roundToInt()
-            val yPx = (item.offsetYMm * scaleH).roundToInt()
-            val rawW = (item.documentType.widthMm * item.scaleFactor * scaleW).roundToInt()
+        val scaleW = if (canvasSize.width > 0) canvasSize.width / A4.WIDTH_MM else 1f
+        val scaleH = if (canvasSize.height > 0) canvasSize.height / A4.HEIGHT_MM else 1f
 
+        items.forEachIndexed { index, item ->
+            val rawW = (item.documentType.widthMm * item.scaleFactor * scaleW).roundToInt()
             val itemWidthDp = with(density) { rawW.toDp() }
 
             DraggableCardItem(
@@ -474,18 +473,12 @@ private fun A4CanvasSheet(
                 itemIndex = index,
                 totalItems = totalItems,
                 isSelected = item.id == selectedItemId,
-                modifier = Modifier
-                    .offset { IntOffset(xPx, yPx) }
-                    .width(itemWidthDp)
-                    .aspectRatio(item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f)),
+                scaleW = scaleW,
+                scaleH = scaleH,
+                canvasSize = canvasSize,
+                itemWidthDp = itemWidthDp,
                 onDragStarted = onDragStarted,
-                onMoved = { dx, dy ->
-                    val dxMm = (dx / canvasSize.width) * A4.WIDTH_MM
-                    val dyMm = (dy / canvasSize.height) * A4.HEIGHT_MM
-                    val newX = item.offsetXMm + dxMm
-                    val newY = item.offsetYMm + dyMm
-                    onItemMoved(item.id, newX, newY)
-                },
+                onItemMoved = onItemMoved,
                 onSelect = { onItemSelected(item.id) },
                 onCropClicked = { uri -> onCropClicked(item.id, uri) }
             )
@@ -499,14 +492,27 @@ private fun DraggableCardItem(
     itemIndex: Int,
     totalItems: Int,
     isSelected: Boolean,
+    scaleW: Float,
+    scaleH: Float,
+    canvasSize: IntSize,
+    itemWidthDp: Dp,
     modifier: Modifier = Modifier,
     onDragStarted: () -> Unit,
-    onMoved: (Float, Float) -> Unit,
+    onItemMoved: (String, Float, Float) -> Unit,
     onSelect: () -> Unit,
     onCropClicked: (Uri) -> Unit
 ) {
+    var localXMm by remember(item.id, item.offsetXMm) { mutableFloatStateOf(item.offsetXMm) }
+    var localYMm by remember(item.id, item.offsetYMm) { mutableFloatStateOf(item.offsetYMm) }
+
+    val xPx = (localXMm * scaleW).roundToInt()
+    val yPx = (localYMm * scaleH).roundToInt()
+
     Box(
         modifier = modifier
+            .offset { IntOffset(xPx, yPx) }
+            .width(itemWidthDp)
+            .aspectRatio(item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f))
             .clip(RoundedCornerShape(2.dp))
             .border(
                 width = if (isSelected) 2.dp else 0.dp,
@@ -518,15 +524,28 @@ private fun DraggableCardItem(
                 indication = null,
                 onClick = onSelect
             )
-            .pointerInput(Unit) {
+            .pointerInput(item.id, canvasSize) {
                 detectDragGestures(
                     onDragStart = {
                         onDragStarted()
                         onSelect()
                     },
-                    onDragEnd = { },
-                    onDrag = { _, dragAmount ->
-                        onMoved(dragAmount.x, dragAmount.y)
+                    onDragEnd = {
+                        onItemMoved(item.id, localXMm, localYMm)
+                    },
+                    onDragCancel = {
+                        onItemMoved(item.id, localXMm, localYMm)
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        if (canvasSize.width > 0 && canvasSize.height > 0) {
+                            val dxMm = (dragAmount.x / canvasSize.width) * A4.WIDTH_MM
+                            val dyMm = (dragAmount.y / canvasSize.height) * A4.HEIGHT_MM
+                            val maxXMm = (A4.WIDTH_MM - item.documentType.widthMm).coerceAtLeast(0f)
+                            val maxYMm = (A4.HEIGHT_MM - item.documentType.heightMm).coerceAtLeast(0f)
+                            localXMm = (localXMm + dxMm).coerceIn(0f, maxXMm)
+                            localYMm = (localYMm + dyMm).coerceIn(0f, maxYMm)
+                        }
                     }
                 )
             }
