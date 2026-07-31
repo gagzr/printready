@@ -49,8 +49,12 @@ class GeneratePdfUseCase(private val context: Context) {
         val bitmap: Bitmap = loadBitmap(uri) ?: return
 
         // Compute size and position in 300 DPI canvas pixels
-        val targetWidthPx = mmToPx(item.documentType.widthMm * item.scaleFactor)
-        val targetHeightPx = mmToPx(item.documentType.heightMm * item.scaleFactor)
+        val effectiveWidthMm = item.overrideWidthMm ?: (item.documentType.widthMm * item.scaleFactor)
+        val initialHeightMm = item.documentType.widthMm / (item.overrideAspectRatio ?: (item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f)))
+        val effectiveHeightMm = item.overrideHeightMm ?: (initialHeightMm * item.scaleFactor)
+        
+        val targetWidthPx = mmToPx(effectiveWidthMm)
+        val targetHeightPx = mmToPx(effectiveHeightMm)
         val leftPx = mmToPx(item.offsetXMm)
         val topPx = mmToPx(item.offsetYMm)
 

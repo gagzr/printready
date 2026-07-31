@@ -201,25 +201,48 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         _workspaceState.update { it.copy(selectedItemId = itemId) }
     }
 
+    private fun getImageAspectRatio(uri: Uri): Float? {
+        return try {
+            val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            val resolver = getApplication<android.app.Application>().contentResolver
+            resolver.openInputStream(uri)?.use { stream ->
+                android.graphics.BitmapFactory.decodeStream(stream, null, options)
+            }
+            if (options.outWidth > 0 && options.outHeight > 0) {
+                options.outWidth.toFloat() / options.outHeight.toFloat()
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     fun addImageToCanvas(uri: Uri) {
         pushUndoSnapshot()
+        val aspectRatio = getImageAspectRatio(uri)
         _workspaceState.update { s ->
             val firstEmptyIndex = s.items.indexOfFirst { it.imageUri == null }
             if (firstEmptyIndex != -1) {
                 val newItems = s.items.toMutableList()
-                newItems[firstEmptyIndex] = newItems[firstEmptyIndex].copy(imageUri = uri)
+                val existingItem = newItems[firstEmptyIndex]
+                val isDoc = existingItem.documentType.category == DocumentCategory.DOCUMENT
+                newItems[firstEmptyIndex] = existingItem.copy(
+                    imageUri = uri,
+                    overrideAspectRatio = if (isDoc) aspectRatio else existingItem.overrideAspectRatio
+                )
                 s.copy(items = newItems)
             } else {
                 if (s.isMultiCard) {
                      val docType = s.selectedDocType ?: DefaultDocumentTypes.first()
                      val itemsCount = s.items.size
                      val (newX, newY) = calculateSkeletonPosition(itemsCount, itemsCount + 1, docType, s.marginPreset.mm)
+                     val isDoc = docType.category == DocumentCategory.DOCUMENT || docType.category == DocumentCategory.CUSTOM
                      val item = CanvasItem(
                          id = UUID.randomUUID().toString(),
                          documentType = docType,
                          imageUri = uri,
                          offsetXMm = newX,
-                         offsetYMm = newY
+                         offsetYMm = newY,
+                         overrideAspectRatio = if (isDoc) aspectRatio else null
                      )
                      s.copy(items = s.items + item)
                 } else {
@@ -320,21 +343,30 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun updateItemUri(itemId: String, uri: Uri) {
         pushUndoSnapshot()
+        val aspectRatio = getImageAspectRatio(uri)
         _workspaceState.update { state ->
             state.copy(items = state.items.map {
-                if (it.id == itemId) it.copy(imageUri = uri) else it
+                if (it.id == itemId) {
+                    val isDoc = it.documentType.category == DocumentCategory.DOCUMENT || it.documentType.category == DocumentCategory.CUSTOM
+                    it.copy(
+                        imageUri = uri,
+                        overrideAspectRatio = if (isDoc) aspectRatio else it.overrideAspectRatio
+                    )
+                } else it
             })
         }
     }
 
-    fun updateItemScaleAndPosition(itemId: String, scaleFactor: Float, offsetXMm: Float, offsetYMm: Float) {
+    fun updateItemScaleAndPosition(itemId: String, scaleFactor: Float, offsetXMm: Float, offsetYMm: Float, widthMm: Float? = null, heightMm: Float? = null) {
         _workspaceState.update { state ->
             state.copy(items = state.items.map {
                 if (it.id == itemId) {
                     it.copy(
-                        scaleFactor = scaleFactor.coerceIn(0.4f, 3.0f),
+                        scaleFactor = scaleFactor,
                         offsetXMm = offsetXMm,
-                        offsetYMm = offsetYMm
+                        offsetYMm = offsetYMm,
+                        overrideWidthMm = widthMm ?: it.overrideWidthMm,
+                        overrideHeightMm = heightMm ?: it.overrideHeightMm
                     )
                 } else it
             })
