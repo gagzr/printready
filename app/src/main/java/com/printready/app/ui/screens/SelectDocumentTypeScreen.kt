@@ -56,7 +56,7 @@ fun SelectDocumentTypeScreen(
                     widthMm = widthMm,
                     heightMm = heightMm
                 )
-                onDocTypeSelected(customType, "scan") // Defaulting to scan for custom currently
+                onDocTypeSelected(customType)
             }
         )
     }

@@ -51,6 +51,10 @@ import android.content.Intent
 import com.yalantis.ucrop.UCrop
 import java.io.File
 
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Refresh
+
 private val WORKSPACE_TOOLS_SINGLE = listOf("Auto-Fit", "Add Page", "Scan Document", "Margins", "Align Top", "Center")
 private val WORKSPACE_TOOLS_MULTI = listOf("Auto-Fit", "Add Page", "Scan Document", "Margins", "Align Top", "Center", "Duplicate", "Auto-Arrange")
 
@@ -200,6 +204,35 @@ fun A4WorkspaceScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.undo() },
+                        enabled = state.canUndo
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Undo,
+                            contentDescription = "Undo",
+                            tint = if (state.canUndo) Primary else OnSurfaceVariant.copy(alpha = 0.38f)
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.redo() },
+                        enabled = state.canRedo
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Redo,
+                            contentDescription = "Redo",
+                            tint = if (state.canRedo) Primary else OnSurfaceVariant.copy(alpha = 0.38f)
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.resetLayout() }
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = "Reset Layout",
+                            tint = Primary
+                        )
+                    }
                     TextButton(onClick = onExport) {
                         Text("Export", color = Primary, style = MaterialTheme.typography.headlineSmall)
                     }
@@ -232,6 +265,7 @@ fun A4WorkspaceScreen(
                     items = state.items,
                     selectedItemId = state.selectedItemId,
                     multiCard = multiCard,
+                    onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
                     onItemSelected = { id ->
                         val item = state.items.find { it.id == id }
@@ -309,6 +343,7 @@ private fun A4CanvasSheet(
     items: List<CanvasItem>,
     selectedItemId: String?,
     multiCard: Boolean,
+    onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
     onItemSelected: (String) -> Unit,
     onAddImage: () -> Unit,
@@ -341,7 +376,8 @@ private fun A4CanvasSheet(
         DashedMarginGuide()
 
         val density = LocalDensity.current
-        items.forEach { item ->
+        val totalItems = items.size
+        items.forEachIndexed { index, item ->
             val scaleW = canvasSize.width / A4.WIDTH_MM
             val scaleH = canvasSize.height / A4.HEIGHT_MM
             val xPx = (item.offsetXMm * scaleW).roundToInt()
@@ -350,13 +386,16 @@ private fun A4CanvasSheet(
 
             val itemWidthDp = with(density) { rawW.toDp() }
 
-                        DraggableCardItem(
+            DraggableCardItem(
                 item = item,
+                itemIndex = index,
+                totalItems = totalItems,
                 isSelected = item.id == selectedItemId,
                 modifier = Modifier
                     .offset { IntOffset(xPx, yPx) }
                     .width(itemWidthDp)
                     .aspectRatio(item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f)),
+                onDragStarted = onDragStarted,
                 onMoved = { dx, dy ->
                     val dxMm = (dx / canvasSize.width) * A4.WIDTH_MM
                     val dyMm = (dy / canvasSize.height) * A4.HEIGHT_MM
@@ -374,8 +413,11 @@ private fun A4CanvasSheet(
 @Composable
 private fun DraggableCardItem(
     item: CanvasItem,
+    itemIndex: Int,
+    totalItems: Int,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
+    onDragStarted: () -> Unit,
     onMoved: (Float, Float) -> Unit,
     onSelect: () -> Unit,
     onCropClicked: (Uri) -> Unit
@@ -395,7 +437,10 @@ private fun DraggableCardItem(
             )
             .pointerInput(Unit) {
                 detectDragGestures(
-                    onDragStart = { onSelect() },
+                    onDragStart = {
+                        onDragStarted()
+                        onSelect()
+                    },
                     onDragEnd = { },
                     onDrag = { _, dragAmount ->
                         onMoved(dragAmount.x, dragAmount.y)
@@ -411,6 +456,12 @@ private fun DraggableCardItem(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
+            val labelText = when {
+                totalItems == 2 && itemIndex == 0 -> "Front (Top Left)"
+                totalItems == 2 && itemIndex == 1 -> "Back (Top Right)"
+                totalItems == 1 -> "Front (Top Center)"
+                else -> "Side ${itemIndex + 1}"
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -429,11 +480,17 @@ private fun DraggableCardItem(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Add image",
                     tint = Primary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 androidx.compose.material3.Text(
-                    text = "Tap to capture side",
+                    text = labelText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Primary
+                )
+                androidx.compose.material3.Text(
+                    text = "Tap to capture",
                     style = MaterialTheme.typography.labelSmall,
                     color = OnSurfaceVariant
                 )
