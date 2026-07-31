@@ -32,7 +32,7 @@ import com.printready.app.viewmodel.PrintReadyViewModel
 fun SelectDocumentTypeScreen(
     viewModel: PrintReadyViewModel,
     onBack: () -> Unit,
-    onDocTypeSelected: (DocumentType, String) -> Unit
+    onDocTypeSelected: (DocumentType) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var showCustomDialog by remember { mutableStateOf(false) }

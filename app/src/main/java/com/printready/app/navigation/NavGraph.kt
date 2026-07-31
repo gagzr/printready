@@ -46,7 +46,7 @@ fun PrintReadyNavGraph() {
             SelectDocumentTypeScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
-                onDocTypeSelected = { docType, _ ->
+                onDocTypeSelected = { docType ->
                     viewModel.selectDocumentType(docType)
                     navController.navigate("workspace/false/$sourceMode")
                 }
