@@ -245,6 +245,7 @@ fun A4WorkspaceScreen(
                     multiCard = multiCard,
                     onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
+                    onItemScaled = { id, scale -> viewModel.updateItemScale(id, scale) },
                     onItemSelected = { id ->
                         val item = state.items.find { it.id == id }
                         if (item?.imageUri == null) {
@@ -430,6 +431,7 @@ private fun A4CanvasSheet(
     multiCard: Boolean,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
+    onItemScaled: (String, Float) -> Unit,
     onItemSelected: (String) -> Unit,
     onAddImage: () -> Unit,
     onCropClicked: (String, Uri) -> Unit
@@ -466,9 +468,6 @@ private fun A4CanvasSheet(
         val scaleH = if (canvasSize.height > 0) canvasSize.height / A4.HEIGHT_MM else 1f
 
         items.forEachIndexed { index, item ->
-            val rawW = (item.documentType.widthMm * item.scaleFactor * scaleW).roundToInt()
-            val itemWidthDp = with(density) { rawW.toDp() }
-
             DraggableCardItem(
                 item = item,
                 itemIndex = index,
@@ -477,9 +476,10 @@ private fun A4CanvasSheet(
                 scaleW = scaleW,
                 scaleH = scaleH,
                 canvasSize = canvasSize,
-                itemWidthDp = itemWidthDp,
+                density = density,
                 onDragStarted = onDragStarted,
                 onItemMoved = onItemMoved,
+                onItemScaled = onItemScaled,
                 onSelect = { onItemSelected(item.id) },
                 onCropClicked = { uri -> onCropClicked(item.id, uri) }
             )
@@ -496,15 +496,20 @@ private fun DraggableCardItem(
     scaleW: Float,
     scaleH: Float,
     canvasSize: IntSize,
-    itemWidthDp: Dp,
+    density: androidx.compose.ui.unit.Density,
     modifier: Modifier = Modifier,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
+    onItemScaled: (String, Float) -> Unit,
     onSelect: () -> Unit,
     onCropClicked: (Uri) -> Unit
 ) {
     var localXMm by remember(item.id, item.offsetXMm) { mutableFloatStateOf(item.offsetXMm) }
     var localYMm by remember(item.id, item.offsetYMm) { mutableFloatStateOf(item.offsetYMm) }
+    var localScale by remember(item.id, item.scaleFactor) { mutableFloatStateOf(item.scaleFactor) }
+
+    val rawW = (item.documentType.widthMm * localScale * scaleW).roundToInt()
+    val itemWidthDp = with(density) { rawW.toDp() }
 
     val xPx = (localXMm * scaleW).roundToInt()
     val yPx = (localYMm * scaleH).roundToInt()
@@ -542,8 +547,8 @@ private fun DraggableCardItem(
                         if (canvasSize.width > 0 && canvasSize.height > 0) {
                             val dxMm = (dragAmount.x / canvasSize.width) * A4.WIDTH_MM
                             val dyMm = (dragAmount.y / canvasSize.height) * A4.HEIGHT_MM
-                            val maxXMm = (A4.WIDTH_MM - item.documentType.widthMm).coerceAtLeast(0f)
-                            val maxYMm = (A4.HEIGHT_MM - item.documentType.heightMm).coerceAtLeast(0f)
+                            val maxXMm = (A4.WIDTH_MM - item.documentType.widthMm * localScale).coerceAtLeast(0f)
+                            val maxYMm = (A4.HEIGHT_MM - item.documentType.heightMm * localScale).coerceAtLeast(0f)
                             localXMm = (localXMm + dxMm).coerceIn(0f, maxXMm)
                             localYMm = (localYMm + dyMm).coerceIn(0f, maxYMm)
                         }
@@ -601,7 +606,15 @@ private fun DraggableCardItem(
         }
         // Corner handles when selected
         if (isSelected) {
-            CornerHandles()
+            CornerHandles(
+                onScaleStart = { onDragStarted() },
+                onScaleDelta = { delta ->
+                    localScale = (localScale + delta).coerceIn(0.4f, 3.0f)
+                },
+                onScaleEnd = {
+                    onItemScaled(item.id, localScale)
+                }
+            )
             if (item.imageUri != null) {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -613,7 +626,7 @@ private fun DraggableCardItem(
                         contentColor = OnPrimary,
                         modifier = Modifier.size(32.dp).offset(y = 16.dp)
                     ) {
-                                                androidx.compose.material3.Text("Edit", style = MaterialTheme.typography.labelSmall)
+                        androidx.compose.material3.Text("Edit", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -622,18 +635,48 @@ private fun DraggableCardItem(
 }
 
 @Composable
-private fun CornerHandles() {
-    val handleMod = Modifier
-        .size(12.dp)
-        .clip(CircleShape)
-        .background(SurfaceContainerLowest)
-        .border(2.dp, Secondary, CircleShape)
+private fun CornerHandles(
+    onScaleStart: () -> Unit,
+    onScaleDelta: (Float) -> Unit,
+    onScaleEnd: () -> Unit
+) {
+    val handleTouchSize = 28.dp
+    val handleVisualSize = 12.dp
+
+    @Composable
+    fun CornerHandleBox(alignment: Alignment, calculateDelta: (Offset) -> Float) {
+        Box(
+            modifier = Modifier
+                .size(handleTouchSize)
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { onScaleStart() },
+                        onDragEnd = { onScaleEnd() },
+                        onDragCancel = { onScaleEnd() },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val delta = calculateDelta(dragAmount)
+                            onScaleDelta(delta)
+                        }
+                    )
+                },
+            contentAlignment = alignment
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(handleVisualSize)
+                    .clip(CircleShape)
+                    .background(SurfaceContainerLowest)
+                    .border(2.dp, Secondary, CircleShape)
+            )
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = handleMod.align(Alignment.TopStart))
-        Box(modifier = handleMod.align(Alignment.TopEnd))
-        Box(modifier = handleMod.align(Alignment.BottomStart))
-        Box(modifier = handleMod.align(Alignment.BottomEnd))
+        CornerHandleBox(Alignment.TopStart) { drag -> (-drag.x - drag.y) / 200f }
+        CornerHandleBox(Alignment.TopEnd) { drag -> (drag.x - drag.y) / 200f }
+        CornerHandleBox(Alignment.BottomStart) { drag -> (-drag.x + drag.y) / 200f }
+        CornerHandleBox(Alignment.BottomEnd) { drag -> (drag.x + drag.y) / 200f }
     }
 }
 
