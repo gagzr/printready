@@ -53,72 +53,12 @@ fun DashboardScreen(
                     )
                 },
                 actions = {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(16.dp))
+                    // Removed unused profile icon placeholder
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
-        bottomBar = {
-            NavigationBar(
-                containerColor = Surface,
-                contentColor = Secondary
-            ) {
-                NavigationBarItem(
-                    selected = selectedNavIndex == 0,
-                    onClick = { selectedNavIndex = 0 },
-                    icon = { Icon(Icons.Default.Home, "Home") },
-                    label = { Text("Home", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedNavIndex == 1,
-                    onClick = { selectedNavIndex = 1 },
-                    icon = { Icon(Icons.Default.Settings, "Gallery") },
-                    label = { Text("Gallery", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedNavIndex == 2,
-                    onClick = { selectedNavIndex = 2 },
-                    icon = { Icon(Icons.Default.Settings, "Settings") },
-                    label = { Text("Settings", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-            }
-        },
+        // bottomBar removed as it was non-functional and redundant
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNewScan,
@@ -265,12 +205,7 @@ private fun PresetChip(label: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = null,
-                tint = Secondary,
-                modifier = Modifier.size(18.dp)
-            )
+            // Removed hardcoded Settings icon here
             Text(label, style = MaterialTheme.typography.labelMedium, color = OnSurface)
         }
     }
@@ -323,12 +258,7 @@ private fun RecentPrintItem(job: PrintJob, onClick: () -> Unit) {
                 color = OnSurfaceVariant
             )
         }
-        Icon(
-            Icons.Default.Settings,
-            contentDescription = "More options",
-            tint = OnSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
+        // Removed non-functional Settings icon here
     }
 }
 

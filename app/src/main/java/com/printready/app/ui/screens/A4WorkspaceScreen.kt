@@ -15,7 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,9 +56,11 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Refresh
 
-private val WORKSPACE_TOOLS_SINGLE = listOf("Auto-Fit", "Add Document", "Margins", "Align Top", "Center")
-private val WORKSPACE_TOOLS_MULTI = listOf("Auto-Fit", "Add Document", "Margins", "Align Top", "Center", "Duplicate", "Auto-Arrange")
-
+private data class WorkspaceTool(val label: String, val icon: ImageVector)
+private val WORKSPACE_TOOLS = listOf(
+    WorkspaceTool("Auto-Fit", Icons.Default.Settings),
+    WorkspaceTool("Add Document", Icons.Default.Add)
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun A4WorkspaceScreen(
@@ -68,7 +71,7 @@ fun A4WorkspaceScreen(
     onExport: () -> Unit
 ) {
     val state by viewModel.workspaceState.collectAsState()
-    val tools = if (multiCard) WORKSPACE_TOOLS_MULTI else WORKSPACE_TOOLS_SINGLE
+    val tools = WORKSPACE_TOOLS
     val context = LocalContext.current
 
     var pendingActionItemId by remember { mutableStateOf<String?>(null) }
@@ -276,7 +279,8 @@ fun A4WorkspaceScreen(
                     ) {
                         tools.forEachIndexed { i, tool ->
                             ToolButton(
-                                label = tool,
+                                label = tool.label,
+                                icon = tool.icon,
                                 isActive = state.activeToolIndex == i,
                                 onClick = {
                                     viewModel.setActiveTool(i)
@@ -545,7 +549,7 @@ private fun MarginSegmentedControl(
 }
 
 @Composable
-private fun ToolButton(label: String, isActive: Boolean, onClick: () -> Unit) {
+private fun ToolButton(label: String, icon: ImageVector, isActive: Boolean, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .widthIn(min = 72.dp)
@@ -561,7 +565,7 @@ private fun ToolButton(label: String, isActive: Boolean, onClick: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                Icons.Default.Add,
+                icon,
                 contentDescription = label,
                 tint = if (isActive) Primary else OnSurfaceVariant,
                 modifier = Modifier.size(24.dp)
