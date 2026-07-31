@@ -47,7 +47,28 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun selectDocumentType(type: DocumentType) {
         _selectedDocType.value = type
-        _workspaceState.update { it.copy(selectedDocType = type, items = emptyList(), selectedItemId = null) }
+
+        val centerX = (A4.WIDTH_MM - type.widthMm) / 2f
+        val centerY = (A4.HEIGHT_MM - type.heightMm) / 2f
+        val spacingY = type.heightMm + 10f
+        val baseOffsetY = centerY - (spacingY / 2f)
+
+        val initialItems = List(type.sides) { index ->
+            val (startX, startY) = if (type.sides == 2) {
+                 Pair(centerX, baseOffsetY + index * spacingY)
+            } else {
+                 Pair(centerX, centerY)
+            }
+            CanvasItem(
+                id = UUID.randomUUID().toString(),
+                documentType = type,
+                imageUri = null,
+                offsetXMm = startX,
+                offsetYMm = startY
+            )
+        }
+
+        _workspaceState.update { it.copy(selectedDocType = type, items = initialItems, selectedItemId = null) }
     }
 
     fun selectItem(itemId: String?) {
@@ -55,32 +76,35 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun addImageToCanvas(uri: Uri) {
-        val state = _workspaceState.value
-        val docType = state.selectedDocType ?: DefaultDocumentTypes.first()
-        val itemsCount = state.items.size
-
-        val centerX = (A4.WIDTH_MM - docType.widthMm) / 2f
-        val centerY = (A4.HEIGHT_MM - docType.heightMm) / 2f
-
-        val (startX, startY) = if (docType.sides == 2) {
-             val spacingY = docType.heightMm + 10f
-             val baseOffsetY = centerY - (spacingY / 2f)
-             Pair(centerX, baseOffsetY + (itemsCount % 2) * spacingY)
-        } else {
-             Pair(centerX + (itemsCount * 10f), centerY + (itemsCount * 10f))
-        }
-
-        val item = CanvasItem(
-            id = UUID.randomUUID().toString(),
-            documentType = docType,
-            imageUri = uri,
-            offsetXMm = startX,
-            offsetYMm = startY
-        )
-
+        // If there's a selected item that is empty or we are replacing it, we could target it, but let's just find the first empty placeholder natively.
+        // OR add it at the end if none are empty.
         _workspaceState.update { s ->
-            val newItems = if (s.isMultiCard || s.items.size < docType.sides) s.items + item else listOf(item)
-            s.copy(items = newItems)
+            val firstEmptyIndex = s.items.indexOfFirst { it.imageUri == null }
+            if (firstEmptyIndex != -1) {
+                val newItems = s.items.toMutableList()
+                newItems[firstEmptyIndex] = newItems[firstEmptyIndex].copy(imageUri = uri)
+                s.copy(items = newItems)
+            } else {
+                // All full, behavior: either append (multiCard) or replace first depending on logic.
+                // Because users might scan a new side specifically via single-tap overlay, they'll use a specific action.
+                // But if they just hit "Add Page" / "Scan" globally:
+                if (s.isMultiCard) {
+                     val docType = s.selectedDocType ?: DefaultDocumentTypes.first()
+                     val itemsCount = s.items.size
+                     val centerX = (A4.WIDTH_MM - docType.widthMm) / 2f
+                     val centerY = (A4.HEIGHT_MM - docType.heightMm) / 2f
+                     val item = CanvasItem(
+                         id = UUID.randomUUID().toString(),
+                         documentType = docType,
+                         imageUri = uri,
+                         offsetXMm = centerX + (itemsCount * 10f),
+                         offsetYMm = centerY + (itemsCount * 10f)
+                     )
+                     s.copy(items = s.items + item)
+                } else {
+                     s // No room to add globally unless multiCard is true.
+                }
+            }
         }
     }
 

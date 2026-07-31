@@ -67,9 +67,20 @@ fun A4WorkspaceScreen(
     val tools = if (multiCard) WORKSPACE_TOOLS_MULTI else WORKSPACE_TOOLS_SINGLE
     val context = LocalContext.current
 
+    var pendingActionItemId by remember { mutableStateOf<String?>(null) }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.addImageToCanvas(it) } }
+    ) { uri: Uri? ->
+        uri?.let {
+            if (pendingActionItemId != null) {
+                viewModel.updateItemUri(pendingActionItemId!!, it)
+                pendingActionItemId = null
+            } else {
+                viewModel.addImageToCanvas(it)
+            }
+        }
+    }
 
     val pageLimitCount = state.selectedDocType?.sides ?: 1
 
@@ -88,9 +99,14 @@ fun A4WorkspaceScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            scanResult?.pages?.forEach { page ->
-                viewModel.addImageToCanvas(page.imageUri)
+            scanResult?.pages?.forEachIndexed { index, page ->
+                if (index == 0 && pendingActionItemId != null) {
+                    viewModel.updateItemUri(pendingActionItemId!!, page.imageUri)
+                } else {
+                    viewModel.addImageToCanvas(page.imageUri)
+                }
             }
+            pendingActionItemId = null
         }
     }
 
@@ -115,13 +131,42 @@ fun A4WorkspaceScreen(
 
     // Auto-launch the appropriate picker if coming from dashboard fresh
     LaunchedEffect(Unit) {
-        if (state.items.isEmpty()) {
+        if (state.items.all { it.imageUri == null }) {
             if (sourceMode == "upload") {
                 imagePickerLauncher.launch("image/*")
             } else if (sourceMode == "scan") {
                 startMlKitScan()
             }
         }
+    }
+
+    var showAddSourceDialogForId by remember { mutableStateOf<String?>(null) }
+
+    if (showAddSourceDialogForId != null) {
+        val id = showAddSourceDialogForId!!
+        AlertDialog(
+            onDismissRequest = { showAddSourceDialogForId = null },
+            title = { Text("Add Image") },
+            text = { Text("Choose a source for your image.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingActionItemId = id
+                    startMlKitScan()
+                    showAddSourceDialogForId = null
+                }) {
+                    Text("Scan with Camera")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    pendingActionItemId = id
+                    imagePickerLauncher.launch("image/*")
+                    showAddSourceDialogForId = null
+                }) {
+                    Text("Upload from Gallery")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -188,7 +233,14 @@ fun A4WorkspaceScreen(
                     selectedItemId = state.selectedItemId,
                     multiCard = multiCard,
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
-                    onItemSelected = { id -> viewModel.selectItem(id) },
+                    onItemSelected = { id ->
+                        val item = state.items.find { it.id == id }
+                        if (item?.imageUri == null) {
+                            showAddSourceDialogForId = id
+                        } else {
+                            viewModel.selectItem(id)
+                        }
+                    },
                     onAddImage = { startMlKitScan() },
                     onCropClicked = { id, uri ->
                         val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
@@ -288,20 +340,6 @@ private fun A4CanvasSheet(
         // Dashed margin guide
         DashedMarginGuide()
 
-        if (items.isEmpty()) {
-            // Empty state — tap to add
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .clickableNoPull(onClick = onAddImage)
-            ) {
-                Icon(Icons.Default.Add, null, tint = OnSurfaceVariant, modifier = Modifier.size(32.dp))
-                Text("Tap to add image", style = MaterialTheme.typography.bodyMedium, color = OnSurfaceVariant)
-            }
-        }
-
         val density = LocalDensity.current
         items.forEach { item ->
             val scaleW = canvasSize.width / A4.WIDTH_MM
@@ -373,7 +411,33 @@ private fun DraggableCardItem(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(Modifier.fillMaxSize().background(SurfaceVariant))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SurfaceContainerHighest)
+                    .drawBehind {
+                        val stroke = Stroke(
+                            width = 4f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+                        )
+                        drawRect(color = OutlineVariant, style = stroke)
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add image",
+                    tint = Primary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.Text(
+                    text = "Tap to capture side",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = OnSurfaceVariant
+                )
+            }
         }
         // Corner handles when selected
         if (isSelected) {
