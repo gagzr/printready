@@ -24,6 +24,9 @@ fun PrintReadyNavGraph() {
 
     NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
         composable(Routes.DASHBOARD) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                viewModel.clearWorkspace()
+            }
             DashboardScreen(
                 viewModel = viewModel,
                 onNewScan = { navController.navigate("workspace/false/scan") },
