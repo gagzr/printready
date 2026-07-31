@@ -47,7 +47,28 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun selectDocumentType(type: DocumentType) {
         _selectedDocType.value = type
-        _workspaceState.update { it.copy(selectedDocType = type, items = emptyList(), selectedItemId = null) }
+
+        val centerX = (A4.WIDTH_MM - type.widthMm) / 2f
+        val centerY = (A4.HEIGHT_MM - type.heightMm) / 2f
+        val spacingY = type.heightMm + 10f
+        val baseOffsetY = centerY - (spacingY / 2f)
+
+        val initialItems = List(type.sides) { index ->
+            val (startX, startY) = if (type.sides == 2) {
+                 Pair(centerX, baseOffsetY + index * spacingY)
+            } else {
+                 Pair(centerX, centerY)
+            }
+            CanvasItem(
+                id = UUID.randomUUID().toString(),
+                documentType = type,
+                imageUri = null,
+                offsetXMm = startX,
+                offsetYMm = startY
+            )
+        }
+
+        _workspaceState.update { it.copy(selectedDocType = type, items = initialItems, selectedItemId = null) }
     }
 
     fun selectItem(itemId: String?) {
