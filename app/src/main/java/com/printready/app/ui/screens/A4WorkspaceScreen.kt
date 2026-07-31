@@ -341,7 +341,8 @@ private fun A4CanvasSheet(
         DashedMarginGuide()
 
         val density = LocalDensity.current
-        items.forEach { item ->
+        val totalItems = items.size
+        items.forEachIndexed { index, item ->
             val scaleW = canvasSize.width / A4.WIDTH_MM
             val scaleH = canvasSize.height / A4.HEIGHT_MM
             val xPx = (item.offsetXMm * scaleW).roundToInt()
@@ -350,8 +351,10 @@ private fun A4CanvasSheet(
 
             val itemWidthDp = with(density) { rawW.toDp() }
 
-                        DraggableCardItem(
+            DraggableCardItem(
                 item = item,
+                itemIndex = index,
+                totalItems = totalItems,
                 isSelected = item.id == selectedItemId,
                 modifier = Modifier
                     .offset { IntOffset(xPx, yPx) }
@@ -374,6 +377,8 @@ private fun A4CanvasSheet(
 @Composable
 private fun DraggableCardItem(
     item: CanvasItem,
+    itemIndex: Int,
+    totalItems: Int,
     isSelected: Boolean,
     modifier: Modifier = Modifier,
     onMoved: (Float, Float) -> Unit,
@@ -411,6 +416,12 @@ private fun DraggableCardItem(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
+            val labelText = when {
+                totalItems == 2 && itemIndex == 0 -> "Front (Top Left)"
+                totalItems == 2 && itemIndex == 1 -> "Back (Top Right)"
+                totalItems == 1 -> "Front (Top Center)"
+                else -> "Side ${itemIndex + 1}"
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -429,11 +440,17 @@ private fun DraggableCardItem(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Add image",
                     tint = Primary,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(24.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 androidx.compose.material3.Text(
-                    text = "Tap to capture side",
+                    text = labelText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Primary
+                )
+                androidx.compose.material3.Text(
+                    text = "Tap to capture",
                     style = MaterialTheme.typography.labelSmall,
                     color = OnSurfaceVariant
                 )
