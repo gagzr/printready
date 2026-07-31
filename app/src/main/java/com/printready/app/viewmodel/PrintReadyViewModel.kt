@@ -45,6 +45,11 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
     private val _selectedDocType = MutableStateFlow<DocumentType?>(null)
     val selectedDocType: StateFlow<DocumentType?> = _selectedDocType.asStateFlow()
 
+    fun clearWorkspace() {
+        _workspaceState.value = WorkspaceUiState()
+        _selectedDocType.value = null
+    }
+
     fun selectDocumentType(type: DocumentType) {
         _selectedDocType.value = type
 
