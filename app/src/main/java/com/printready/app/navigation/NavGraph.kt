@@ -14,7 +14,6 @@ object Routes {
     const val DASHBOARD = "dashboard"
     const val SELECT_DOC_TYPE = "select_doc_type/{sourceMode}"
     const val WORKSPACE = "workspace/{multiCard}/{sourceMode}"
-    const val PRINT_PREVIEW = "print_preview"
 }
 
 @Composable
@@ -34,7 +33,7 @@ fun PrintReadyNavGraph() {
                     viewModel.selectDocumentType(docType)
                     navController.navigate("workspace/false/scan")
                 },
-                onRecentJobClick = { navController.navigate(Routes.PRINT_PREVIEW) }
+                onRecentJobClick = { /* TODO: Load job into workspace */ }
             )
         }
         composable(
@@ -64,13 +63,6 @@ fun PrintReadyNavGraph() {
                 viewModel = viewModel,
                 multiCard = multiCard,
                 sourceMode = sourceMode,
-                onBack = { navController.popBackStack() },
-                onExport = { navController.navigate(Routes.PRINT_PREVIEW) }
-            )
-        }
-        composable(Routes.PRINT_PREVIEW) {
-            PrintPreviewScreen(
-                viewModel = viewModel,
                 onBack = { navController.popBackStack() }
             )
         }
