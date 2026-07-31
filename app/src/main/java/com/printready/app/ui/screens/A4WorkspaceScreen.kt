@@ -99,9 +99,14 @@ fun A4WorkspaceScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-            scanResult?.pages?.forEach { page ->
-                viewModel.addImageToCanvas(page.imageUri)
+            scanResult?.pages?.forEachIndexed { index, page ->
+                if (index == 0 && pendingActionItemId != null) {
+                    viewModel.updateItemUri(pendingActionItemId!!, page.imageUri)
+                } else {
+                    viewModel.addImageToCanvas(page.imageUri)
+                }
             }
+            pendingActionItemId = null
         }
     }
 
