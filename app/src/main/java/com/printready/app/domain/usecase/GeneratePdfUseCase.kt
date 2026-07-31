@@ -18,17 +18,16 @@ class GeneratePdfUseCase(private val context: Context) {
     fun execute(job: PrintJob, outputFile: File): Result<File> = runCatching {
         val document = PdfDocument()
 
-        // Android's PdfDocument uses PostScript points (1/72 inch).
-        // A4 210x297mm -> 595.275 pt x 841.889 pt
-        val pageWidthPt = (210f / 25.4f * 72f).toInt() // approx 595
-        val pageHeightPt = (297f / 25.4f * 72f).toInt() // approx 842
+        // High-resolution A4 page at 300 DPI (2480 x 3508 px)
+        val pageWidthPx = A4.WIDTH_PX
+        val pageHeightPx = A4.HEIGHT_PX
 
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPt, pageHeightPt, 1).create()
+        val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
         val page = document.startPage(pageInfo)
         val canvas: Canvas = page.canvas
 
         val bgPaint = Paint().apply { color = android.graphics.Color.WHITE }
-        canvas.drawRect(0f, 0f, pageWidthPt.toFloat(), pageHeightPt.toFloat(), bgPaint)
+        canvas.drawRect(0f, 0f, pageWidthPx.toFloat(), pageHeightPx.toFloat(), bgPaint)
 
         for (item in job.items) {
             drawItem(canvas, item)
@@ -41,40 +40,39 @@ class GeneratePdfUseCase(private val context: Context) {
         outputFile
     }
 
-    private fun mmToPt(mm: Float): Float {
-        return mm / 25.4f * 72f
+    private fun mmToPx(mm: Float): Float {
+        return A4.mmToPx(mm)
     }
 
     private fun drawItem(canvas: Canvas, item: CanvasItem) {
         val uri: Uri = item.imageUri ?: return
         val bitmap: Bitmap = loadBitmap(uri) ?: return
 
-        // Compute size and position in PDF points
-        val targetWidthPt = mmToPt(item.documentType.widthMm * item.scaleFactor)
-        val targetHeightPt = mmToPt(item.documentType.heightMm * item.scaleFactor)
-        val leftPt = mmToPt(item.offsetXMm)
-        val topPt = mmToPt(item.offsetYMm)
+        // Compute size and position in 300 DPI canvas pixels
+        val targetWidthPx = mmToPx(item.documentType.widthMm * item.scaleFactor)
+        val targetHeightPx = mmToPx(item.documentType.heightMm * item.scaleFactor)
+        val leftPx = mmToPx(item.offsetXMm)
+        val topPx = mmToPx(item.offsetYMm)
 
         // Ensure dimensions are positive
-        if (targetWidthPt <= 0 || targetHeightPt <= 0) {
+        if (targetWidthPx <= 0 || targetHeightPx <= 0) {
             bitmap.recycle()
             return
         }
 
-        // We want to map the original bitmap (width x height) to the target bounding box (targetWidthPt x targetHeightPt)
-        // using the item's location and rotation.
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        // High quality bitmap scaling paint
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
 
         val saved = canvas.save()
         // Compute center for rotation based on the final target size
-        val pivotX = leftPt + targetWidthPt / 2f
-        val pivotY = topPt + targetHeightPt / 2f
+        val pivotX = leftPx + targetWidthPx / 2f
+        val pivotY = topPx + targetHeightPx / 2f
         canvas.rotate(item.rotationDeg, pivotX, pivotY)
 
         val srcRect = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
-        val dstRectF = android.graphics.RectF(leftPt, topPt, leftPt + targetWidthPt, topPt + targetHeightPt)
+        val dstRectF = android.graphics.RectF(leftPx, topPx, leftPx + targetWidthPx, topPx + targetHeightPx)
 
-        // Draw the bitmap mapped exactly to the destination rectangle without creating an intermediate scaled bitmap
+        // Draw original high-res bitmap mapped directly to destination rectangle
         canvas.drawBitmap(bitmap, srcRect, dstRectF, paint)
 
         canvas.restoreToCount(saved)

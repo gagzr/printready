@@ -262,6 +262,7 @@ fun A4WorkspaceScreen(
                                 setFreeStyleCropEnabled(true)
                                 setHideBottomControls(false)
                                 setToolbarTitle("Crop Image")
+                                setCompressionQuality(100)
                             })
                             .getIntent(context)
                         viewModel.selectItem(id)
