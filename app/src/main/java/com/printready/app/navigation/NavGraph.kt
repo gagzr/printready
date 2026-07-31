@@ -33,7 +33,10 @@ fun PrintReadyNavGraph() {
                     viewModel.selectDocumentType(docType)
                     navController.navigate("workspace/false/scan")
                 },
-                onRecentJobClick = { /* TODO: Load job into workspace */ }
+                onRecentJobClick = { job ->
+                    viewModel.loadPrintJob(job)
+                    navController.navigate("workspace/false/scan")
+                }
             )
         }
         composable(

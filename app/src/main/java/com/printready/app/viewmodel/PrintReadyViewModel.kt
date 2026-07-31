@@ -158,6 +158,25 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun loadPrintJob(job: PrintJob) {
+        undoStack.clear()
+        redoStack.clear()
+        _selectedDocType.value = job.documentType
+        val preset = MarginPreset.entries.find { it.mm == job.marginMm } ?: MarginPreset.NORMAL
+        
+        _workspaceState.update {
+            it.copy(
+                selectedDocType = job.documentType,
+                items = job.items,
+                marginPreset = preset,
+                selectedItemId = null,
+                canUndo = false,
+                canRedo = false,
+                pdfFile = null
+            )
+        }
+    }
+
     fun selectDocumentType(type: DocumentType) {
         undoStack.clear()
         redoStack.clear()
