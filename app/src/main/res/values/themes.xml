@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.PrintReady" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

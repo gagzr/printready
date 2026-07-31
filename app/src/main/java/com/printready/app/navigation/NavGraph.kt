@@ -1,0 +1,72 @@
+package com.printready.app.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.printready.app.ui.screens.*
+import com.printready.app.viewmodel.PrintReadyViewModel
+
+object Routes {
+    const val DASHBOARD = "dashboard"
+    const val SELECT_DOC_TYPE = "select_doc_type"
+    const val WORKSPACE = "workspace/{multiCard}/{sourceMode}"
+    const val PRINT_PREVIEW = "print_preview"
+}
+
+@Composable
+fun PrintReadyNavGraph() {
+    val navController = rememberNavController()
+    val viewModel: PrintReadyViewModel = viewModel()
+
+    NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
+        composable(Routes.DASHBOARD) {
+            DashboardScreen(
+                viewModel = viewModel,
+                onNewScan = { navController.navigate("workspace/false/scan") },
+                onUpload = { navController.navigate("workspace/false/upload") },
+                onPresetSelected = { docType ->
+                    viewModel.selectDocumentType(docType)
+                    navController.navigate("workspace/false/scan")
+                },
+                onRecentJobClick = { navController.navigate(Routes.PRINT_PREVIEW) }
+            )
+        }
+        composable(Routes.SELECT_DOC_TYPE) {
+            SelectDocumentTypeScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onDocTypeSelected = { docType, sourceMode ->
+                    viewModel.selectDocumentType(docType)
+                    navController.navigate("workspace/false/$sourceMode")
+                }
+            )
+        }
+        composable(
+            "workspace/{multiCard}/{sourceMode}",
+            arguments = listOf(
+                navArgument("multiCard") { type = NavType.BoolType },
+                navArgument("sourceMode") { type = NavType.StringType }
+            )
+        ) { backStack ->
+            val multiCard = backStack.arguments?.getBoolean("multiCard") ?: false
+            val sourceMode = backStack.arguments?.getString("sourceMode") ?: "scan"
+            A4WorkspaceScreen(
+                viewModel = viewModel,
+                multiCard = multiCard,
+                sourceMode = sourceMode,
+                onBack = { navController.popBackStack() },
+                onExport = { navController.navigate(Routes.PRINT_PREVIEW) }
+            )
+        }
+        composable(Routes.PRINT_PREVIEW) {
+            PrintPreviewScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+    }
+}
