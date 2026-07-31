@@ -30,7 +30,6 @@ fun PrintReadyNavGraph() {
             DashboardScreen(
                 viewModel = viewModel,
                 onNewScan = { navController.navigate("select_doc_type/scan") },
-                onUpload = { navController.navigate("select_doc_type/upload") },
                 onPresetSelected = { docType ->
                     viewModel.selectDocumentType(docType)
                     navController.navigate("workspace/false/scan")
