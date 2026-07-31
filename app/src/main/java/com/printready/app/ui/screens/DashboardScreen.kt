@@ -83,18 +83,6 @@ fun DashboardScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
         },
-        // bottomBar removed as it was non-functional and redundant
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewScan,
-                containerColor = Primary,
-                contentColor = OnPrimary,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Icon(Icons.Default.Add, "New scan", modifier = Modifier.size(24.dp))
-            }
-        },
         containerColor = Surface
     ) { padding ->
         Column(
