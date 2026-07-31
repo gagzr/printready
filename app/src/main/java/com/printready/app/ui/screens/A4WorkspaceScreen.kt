@@ -245,7 +245,7 @@ fun A4WorkspaceScreen(
                     multiCard = multiCard,
                     onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
-                    onItemScaled = { id, scale -> viewModel.updateItemScale(id, scale) },
+                    onItemScaled = { id, scale, x, y -> viewModel.updateItemScaleAndPosition(id, scale, x, y) },
                     onItemSelected = { id ->
                         val item = state.items.find { it.id == id }
                         if (item?.imageUri == null) {
@@ -431,7 +431,7 @@ private fun A4CanvasSheet(
     multiCard: Boolean,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
-    onItemScaled: (String, Float) -> Unit,
+    onItemScaled: (String, Float, Float, Float) -> Unit,
     onItemSelected: (String) -> Unit,
     onAddImage: () -> Unit,
     onCropClicked: (String, Uri) -> Unit
@@ -500,7 +500,7 @@ private fun DraggableCardItem(
     modifier: Modifier = Modifier,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
-    onItemScaled: (String, Float) -> Unit,
+    onItemScaled: (String, Float, Float, Float) -> Unit,
     onSelect: () -> Unit,
     onCropClicked: (Uri) -> Unit
 ) {
@@ -608,11 +608,32 @@ private fun DraggableCardItem(
         if (isSelected) {
             CornerHandles(
                 onScaleStart = { onDragStarted() },
-                onScaleDelta = { delta ->
-                    localScale = (localScale + delta).coerceIn(0.4f, 3.0f)
+                onScaleDelta = { corner, delta ->
+                    val oldScale = localScale
+                    val newScale = (oldScale + delta).coerceIn(0.4f, 3.0f)
+                    val effectiveDelta = newScale - oldScale
+                    val dw = item.documentType.widthMm * effectiveDelta
+                    val dh = item.documentType.heightMm * effectiveDelta
+
+                    localScale = newScale
+                    when (corner) {
+                        Corner.TopLeft -> {
+                            localXMm -= dw
+                            localYMm -= dh
+                        }
+                        Corner.TopRight -> {
+                            localYMm -= dh
+                        }
+                        Corner.BottomLeft -> {
+                            localXMm -= dw
+                        }
+                        Corner.BottomRight -> {
+                            // nothing
+                        }
+                    }
                 },
                 onScaleEnd = {
-                    onItemScaled(item.id, localScale)
+                    onItemScaled(item.id, localScale, localXMm, localYMm)
                 }
             )
             if (item.imageUri != null) {
@@ -634,19 +655,22 @@ private fun DraggableCardItem(
     }
 }
 
+enum class Corner { TopLeft, TopRight, BottomLeft, BottomRight }
+
 @Composable
 private fun CornerHandles(
     onScaleStart: () -> Unit,
-    onScaleDelta: (Float) -> Unit,
+    onScaleDelta: (Corner, Float) -> Unit,
     onScaleEnd: () -> Unit
 ) {
     val handleTouchSize = 28.dp
     val handleVisualSize = 12.dp
 
     @Composable
-    fun CornerHandleBox(alignment: Alignment, calculateDelta: (Offset) -> Float) {
+    fun BoxScope.CornerHandleBox(alignment: Alignment, corner: Corner, calculateDelta: (Offset) -> Float) {
         Box(
             modifier = Modifier
+                .align(alignment)
                 .size(handleTouchSize)
                 .pointerInput(Unit) {
                     detectDragGestures(
@@ -656,7 +680,7 @@ private fun CornerHandles(
                         onDrag = { change, dragAmount ->
                             change.consume()
                             val delta = calculateDelta(dragAmount)
-                            onScaleDelta(delta)
+                            onScaleDelta(corner, delta)
                         }
                     )
                 },
@@ -673,10 +697,10 @@ private fun CornerHandles(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        CornerHandleBox(Alignment.TopStart) { drag -> (-drag.x - drag.y) / 200f }
-        CornerHandleBox(Alignment.TopEnd) { drag -> (drag.x - drag.y) / 200f }
-        CornerHandleBox(Alignment.BottomStart) { drag -> (-drag.x + drag.y) / 200f }
-        CornerHandleBox(Alignment.BottomEnd) { drag -> (drag.x + drag.y) / 200f }
+        CornerHandleBox(Alignment.TopStart, Corner.TopLeft) { drag -> (-drag.x - drag.y) / 200f }
+        CornerHandleBox(Alignment.TopEnd, Corner.TopRight) { drag -> (drag.x - drag.y) / 200f }
+        CornerHandleBox(Alignment.BottomStart, Corner.BottomLeft) { drag -> (-drag.x + drag.y) / 200f }
+        CornerHandleBox(Alignment.BottomEnd, Corner.BottomRight) { drag -> (drag.x + drag.y) / 200f }
     }
 }
 
