@@ -67,9 +67,20 @@ fun A4WorkspaceScreen(
     val tools = if (multiCard) WORKSPACE_TOOLS_MULTI else WORKSPACE_TOOLS_SINGLE
     val context = LocalContext.current
 
+    var pendingActionItemId by remember { mutableStateOf<String?>(null) }
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> uri?.let { viewModel.addImageToCanvas(it) } }
+    ) { uri: Uri? ->
+        uri?.let {
+            if (pendingActionItemId != null) {
+                viewModel.updateItemUri(pendingActionItemId!!, it)
+                pendingActionItemId = null
+            } else {
+                viewModel.addImageToCanvas(it)
+            }
+        }
+    }
 
     val pageLimitCount = state.selectedDocType?.sides ?: 1
 
