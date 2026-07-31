@@ -245,7 +245,7 @@ fun A4WorkspaceScreen(
                     multiCard = multiCard,
                     onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
-                    onItemScaled = { id, scale, x, y -> viewModel.updateItemScaleAndPosition(id, scale, x, y) },
+                    onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
                     onItemSelected = { id ->
                         val item = state.items.find { it.id == id }
                         if (item?.imageUri == null) {
@@ -257,10 +257,24 @@ fun A4WorkspaceScreen(
                     },
                     onAddImage = { startMlKitScan() },
                     onCropClicked = { id, uri ->
+                        val item = state.items.find { it.id == id }
                         val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
                         val uCropIntent = UCrop.of(uri, destUri)
                             .withOptions(UCrop.Options().apply {
-                                setFreeStyleCropEnabled(true)
+                                val isDoc = item?.documentType?.category == com.printready.app.domain.model.DocumentCategory.DOCUMENT || item?.documentType?.category == com.printready.app.domain.model.DocumentCategory.CUSTOM
+                                if (item != null && item.documentType.widthMm > 0f && item.documentType.heightMm > 0f && !isDoc) {
+                                    withAspectRatio(item.documentType.widthMm, item.documentType.heightMm)
+                                    setFreeStyleCropEnabled(false)
+                                } else {
+                                    setFreeStyleCropEnabled(true)
+                                    setAspectRatioOptions(0,
+                                        com.yalantis.ucrop.model.AspectRatio("Custom", 0f, 0f),
+                                        com.yalantis.ucrop.model.AspectRatio("1:1", 1f, 1f),
+                                        com.yalantis.ucrop.model.AspectRatio("3:4", 3f, 4f),
+                                        com.yalantis.ucrop.model.AspectRatio("3:2", 3f, 2f),
+                                        com.yalantis.ucrop.model.AspectRatio("16:9", 16f, 9f)
+                                    )
+                                }
                                 setHideBottomControls(false)
                                 setToolbarTitle("Crop Image")
                                 setCompressionQuality(100)
@@ -431,7 +445,7 @@ private fun A4CanvasSheet(
     multiCard: Boolean,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
-    onItemScaled: (String, Float, Float, Float) -> Unit,
+    onItemScaled: (String, Float, Float, Float, Float?, Float?) -> Unit,
     onItemSelected: (String) -> Unit,
     onAddImage: () -> Unit,
     onCropClicked: (String, Uri) -> Unit
@@ -500,15 +514,26 @@ private fun DraggableCardItem(
     modifier: Modifier = Modifier,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
-    onItemScaled: (String, Float, Float, Float) -> Unit,
+    onItemScaled: (String, Float, Float, Float, Float?, Float?) -> Unit,
     onSelect: () -> Unit,
     onCropClicked: (Uri) -> Unit
 ) {
     var localXMm by remember(item.id, item.offsetXMm) { mutableFloatStateOf(item.offsetXMm) }
     var localYMm by remember(item.id, item.offsetYMm) { mutableFloatStateOf(item.offsetYMm) }
-    var localScale by remember(item.id, item.scaleFactor) { mutableFloatStateOf(item.scaleFactor) }
+    
+    val initialEffectiveAspectRatio = item.overrideAspectRatio ?: (item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f))
+    val initialHeightMm = item.documentType.widthMm / initialEffectiveAspectRatio
+    
+    var localWidthMm by remember(item.id, item.overrideWidthMm, item.scaleFactor) { 
+        mutableFloatStateOf(item.overrideWidthMm ?: (item.documentType.widthMm * item.scaleFactor)) 
+    }
+    var localHeightMm by remember(item.id, item.overrideHeightMm, item.scaleFactor) { 
+        mutableFloatStateOf(item.overrideHeightMm ?: (initialHeightMm * item.scaleFactor)) 
+    }
 
-    val rawW = (item.documentType.widthMm * localScale * scaleW).roundToInt()
+    val effectiveAspectRatio = localWidthMm / localHeightMm.coerceAtLeast(1f)
+
+    val rawW = (localWidthMm * scaleW).roundToInt()
     val itemWidthDp = with(density) { rawW.toDp() }
 
     val xPx = (localXMm * scaleW).roundToInt()
@@ -518,7 +543,7 @@ private fun DraggableCardItem(
         modifier = modifier
             .offset { IntOffset(xPx, yPx) }
             .width(itemWidthDp)
-            .aspectRatio(item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f))
+            .aspectRatio(effectiveAspectRatio)
             .clip(RoundedCornerShape(2.dp))
             .border(
                 width = if (isSelected) 2.dp else 0.dp,
@@ -547,8 +572,8 @@ private fun DraggableCardItem(
                         if (canvasSize.width > 0 && canvasSize.height > 0) {
                             val dxMm = (dragAmount.x / canvasSize.width) * A4.WIDTH_MM
                             val dyMm = (dragAmount.y / canvasSize.height) * A4.HEIGHT_MM
-                            val maxXMm = (A4.WIDTH_MM - item.documentType.widthMm * localScale).coerceAtLeast(0f)
-                            val maxYMm = (A4.HEIGHT_MM - item.documentType.heightMm * localScale).coerceAtLeast(0f)
+                            val maxXMm = (A4.WIDTH_MM - localWidthMm).coerceAtLeast(0f)
+                            val maxYMm = (A4.HEIGHT_MM - localHeightMm).coerceAtLeast(0f)
                             localXMm = (localXMm + dxMm).coerceIn(0f, maxXMm)
                             localYMm = (localYMm + dyMm).coerceIn(0f, maxYMm)
                         }
@@ -608,47 +633,48 @@ private fun DraggableCardItem(
         if (isSelected) {
             CornerHandles(
                 onScaleStart = { onDragStarted() },
-                onScaleDelta = { corner, delta ->
-                    val oldScale = localScale
-                    val newScale = (oldScale + delta).coerceIn(0.4f, 3.0f)
-                    val effectiveDelta = newScale - oldScale
-                    val dw = item.documentType.widthMm * effectiveDelta
-                    val dh = item.documentType.heightMm * effectiveDelta
+                onScaleDelta = { corner, dragAmountPx ->
+                    val dxMm = dragAmountPx.x / scaleW
+                    val dyMm = dragAmountPx.y / scaleH
+                    
+                    var dw = 0f
+                    var dh = 0f
+                    var moveX = 0f
+                    var moveY = 0f
 
-                    localScale = newScale
                     when (corner) {
-                        Corner.TopLeft -> {
-                            localXMm -= dw
-                            localYMm -= dh
-                        }
-                        Corner.TopRight -> {
-                            localYMm -= dh
-                        }
-                        Corner.BottomLeft -> {
-                            localXMm -= dw
-                        }
-                        Corner.BottomRight -> {
-                            // nothing
-                        }
+                        Corner.TopLeft -> { dw = -dxMm; dh = -dyMm; moveX = dxMm; moveY = dyMm }
+                        Corner.TopRight -> { dw = dxMm; dh = -dyMm; moveY = dyMm }
+                        Corner.BottomLeft -> { dw = -dxMm; dh = dyMm; moveX = dxMm }
+                        Corner.BottomRight -> { dw = dxMm; dh = dyMm }
+                    }
+
+                    if (localWidthMm + dw >= 10f && localHeightMm + dh >= 10f) {
+                        localWidthMm += dw
+                        localHeightMm += dh
+                        localXMm += moveX
+                        localYMm += moveY
                     }
                 },
                 onScaleEnd = {
-                    onItemScaled(item.id, localScale, localXMm, localYMm)
+                    onItemScaled(item.id, 1f, localXMm, localYMm, localWidthMm, localHeightMm)
                 }
             )
-            if (item.imageUri != null) {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(8.dp),
-                    contentAlignment = Alignment.BottomCenter
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isSelected && item.imageUri != null,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = { item.imageUri?.let { onCropClicked(it) } },
+                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    elevation = androidx.compose.material3.ButtonDefaults.filledTonalButtonElevation(defaultElevation = 4.dp)
                 ) {
-                    SmallFloatingActionButton(
-                        onClick = { onCropClicked(item.imageUri) },
-                        containerColor = Primary,
-                        contentColor = OnPrimary,
-                        modifier = Modifier.size(32.dp).offset(y = 16.dp)
-                    ) {
-                        androidx.compose.material3.Text("Edit", style = MaterialTheme.typography.labelSmall)
-                    }
+                    androidx.compose.material3.Text("Crop & Edit")
                 }
             }
         }
@@ -660,14 +686,14 @@ enum class Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 @Composable
 private fun CornerHandles(
     onScaleStart: () -> Unit,
-    onScaleDelta: (Corner, Float) -> Unit,
+    onScaleDelta: (Corner, Offset) -> Unit,
     onScaleEnd: () -> Unit
 ) {
     val handleTouchSize = 28.dp
     val handleVisualSize = 12.dp
 
     @Composable
-    fun BoxScope.CornerHandleBox(alignment: Alignment, corner: Corner, calculateDelta: (Offset) -> Float) {
+    fun BoxScope.CornerHandleBox(alignment: Alignment, corner: Corner) {
         Box(
             modifier = Modifier
                 .align(alignment)
@@ -679,8 +705,7 @@ private fun CornerHandles(
                         onDragCancel = { onScaleEnd() },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val delta = calculateDelta(dragAmount)
-                            onScaleDelta(corner, delta)
+                            onScaleDelta(corner, dragAmount)
                         }
                     )
                 },
@@ -697,10 +722,10 @@ private fun CornerHandles(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        CornerHandleBox(Alignment.TopStart, Corner.TopLeft) { drag -> (-drag.x - drag.y) / 200f }
-        CornerHandleBox(Alignment.TopEnd, Corner.TopRight) { drag -> (drag.x - drag.y) / 200f }
-        CornerHandleBox(Alignment.BottomStart, Corner.BottomLeft) { drag -> (-drag.x + drag.y) / 200f }
-        CornerHandleBox(Alignment.BottomEnd, Corner.BottomRight) { drag -> (drag.x + drag.y) / 200f }
+        CornerHandleBox(Alignment.TopStart, Corner.TopLeft)
+        CornerHandleBox(Alignment.TopEnd, Corner.TopRight)
+        CornerHandleBox(Alignment.BottomStart, Corner.BottomLeft)
+        CornerHandleBox(Alignment.BottomEnd, Corner.BottomRight)
     }
 }
 

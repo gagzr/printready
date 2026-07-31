@@ -41,7 +41,10 @@ data class CanvasItem(
     val offsetXMm: Float = 0f,
     val offsetYMm: Float = 0f,
     val scaleFactor: Float = 1f,
-    val rotationDeg: Float = 0f
+    val rotationDeg: Float = 0f,
+    val overrideAspectRatio: Float? = null,
+    val overrideWidthMm: Float? = null,
+    val overrideHeightMm: Float? = null
 )
 
 data class PrintJob(
