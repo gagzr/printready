@@ -32,7 +32,7 @@ import com.printready.app.viewmodel.PrintReadyViewModel
 fun SelectDocumentTypeScreen(
     viewModel: PrintReadyViewModel,
     onBack: () -> Unit,
-    onDocTypeSelected: (DocumentType, String) -> Unit
+    onDocTypeSelected: (DocumentType) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var showCustomDialog by remember { mutableStateOf(false) }
@@ -123,7 +123,7 @@ fun SelectDocumentTypeScreen(
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 items(filtered.dropLast(1)) { docType ->
-                    DocTypeCard(docType = docType, onClick = { onDocTypeSelected(docType, "scan") }) // Default to scan here for now, or might need to pass sourceMode to this screen
+                    DocTypeCard(docType = docType, onClick = { onDocTypeSelected(docType) }) // Default to scan here for now, or might need to pass sourceMode to this screen
                 }
                 // Custom size — full width
                 item(span = { GridItemSpan(2) }) {
