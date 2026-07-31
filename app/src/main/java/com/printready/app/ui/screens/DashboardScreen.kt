@@ -36,7 +36,6 @@ import com.printready.app.viewmodel.PrintReadyViewModel
 fun DashboardScreen(
     viewModel: PrintReadyViewModel,
     onNewScan: () -> Unit,
-    onUpload: () -> Unit,
     onPresetSelected: (DocumentType) -> Unit,
     onRecentJobClick: (PrintJob) -> Unit
 ) {
@@ -162,17 +161,9 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     iconBg = Primary,
                     iconLabel = "scan_doc",
-                    title = "Quick Scan",
-                    subtitle = "Capture & auto-detect edges",
+                    title = "Scan or Add Document",
+                    subtitle = "Use camera or select from gallery",
                     onClick = onNewScan
-                )
-                BentoCard(
-                    modifier = Modifier.weight(1f),
-                    iconBg = Secondary,
-                    iconLabel = "upload",
-                    title = "Upload File",
-                    subtitle = "Pick from gallery or Files",
-                    onClick = onUpload
                 )
             }
 

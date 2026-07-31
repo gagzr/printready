@@ -55,8 +55,8 @@ import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Refresh
 
-private val WORKSPACE_TOOLS_SINGLE = listOf("Auto-Fit", "Add Page", "Scan Document", "Margins", "Align Top", "Center")
-private val WORKSPACE_TOOLS_MULTI = listOf("Auto-Fit", "Add Page", "Scan Document", "Margins", "Align Top", "Center", "Duplicate", "Auto-Arrange")
+private val WORKSPACE_TOOLS_SINGLE = listOf("Auto-Fit", "Add Document", "Margins", "Align Top", "Center")
+private val WORKSPACE_TOOLS_MULTI = listOf("Auto-Fit", "Add Document", "Margins", "Align Top", "Center", "Duplicate", "Auto-Arrange")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,18 +73,6 @@ fun A4WorkspaceScreen(
 
     var pendingActionItemId by remember { mutableStateOf<String?>(null) }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let {
-            if (pendingActionItemId != null) {
-                viewModel.updateItemUri(pendingActionItemId!!, it)
-                pendingActionItemId = null
-            } else {
-                viewModel.addImageToCanvas(it)
-            }
-        }
-    }
 
     val pageLimitCount = state.selectedDocType?.sides ?: 1
 
@@ -133,45 +121,14 @@ fun A4WorkspaceScreen(
         }
     }
 
-    // Auto-launch the appropriate picker if coming from dashboard fresh
+    // Auto-launch scanner if coming from dashboard fresh
     LaunchedEffect(Unit) {
         if (state.items.all { it.imageUri == null }) {
-            if (sourceMode == "upload") {
-                imagePickerLauncher.launch("image/*")
-            } else if (sourceMode == "scan") {
-                startMlKitScan()
-            }
+            startMlKitScan()
         }
     }
 
-    var showAddSourceDialogForId by remember { mutableStateOf<String?>(null) }
 
-    if (showAddSourceDialogForId != null) {
-        val id = showAddSourceDialogForId!!
-        AlertDialog(
-            onDismissRequest = { showAddSourceDialogForId = null },
-            title = { Text("Add Image") },
-            text = { Text("Choose a source for your image.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingActionItemId = id
-                    startMlKitScan()
-                    showAddSourceDialogForId = null
-                }) {
-                    Text("Scan with Camera")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    pendingActionItemId = id
-                    imagePickerLauncher.launch("image/*")
-                    showAddSourceDialogForId = null
-                }) {
-                    Text("Upload from Gallery")
-                }
-            }
-        )
-    }
 
     Scaffold(
         topBar = {
@@ -270,7 +227,8 @@ fun A4WorkspaceScreen(
                     onItemSelected = { id ->
                         val item = state.items.find { it.id == id }
                         if (item?.imageUri == null) {
-                            showAddSourceDialogForId = id
+                            pendingActionItemId = id
+                            startMlKitScan()
                         } else {
                             viewModel.selectItem(id)
                         }
@@ -324,8 +282,7 @@ fun A4WorkspaceScreen(
                                     viewModel.setActiveTool(i)
                                     when (i) {
                                         0 -> viewModel.autoFitItems()
-                                        1 -> imagePickerLauncher.launch("image/*")
-                                        2 -> startMlKitScan()
+                                        1 -> startMlKitScan()
                                         else -> {}
                                     }
                                 }
