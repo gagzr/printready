@@ -52,7 +52,8 @@ data class PrintJob(
     val marginMm: Float = 10f,
     val createdAt: Long = System.currentTimeMillis(),
     val pageCount: Int = 1,
-    val fileSizeBytes: Long = 0L
+    val fileSizeBytes: Long = 0L,
+    val pdfFilePath: String? = null
 )
 
 enum class MarginPreset(val label: String, val mm: Float) {

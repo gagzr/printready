@@ -12,9 +12,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Create
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import android.widget.Toast
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +47,25 @@ fun DashboardScreen(
     onRecentJobClick: (PrintJob) -> Unit
 ) {
     val dashState by viewModel.dashboardState.collectAsState()
-    var selectedNavIndex by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+
+    var renamingJob by remember { mutableStateOf<PrintJob?>(null) }
+    var renameText by remember { mutableStateOf("") }
+
+    val handlePrintShare: (PrintJob) -> Unit = { job ->
+        val filePath = job.pdfFilePath
+        if (filePath != null && File(filePath).exists()) {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(filePath))
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share/Print PDF"))
+        } else {
+            Toast.makeText(context, "PDF file not found. Open in workspace to regenerate.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -53,82 +78,10 @@ fun DashboardScreen(
                     )
                 },
                 actions = {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(SurfaceContainerHigh)
-                            .clickable { },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(16.dp))
+                    // Removed unused profile icon placeholder
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = Surface,
-                contentColor = Secondary
-            ) {
-                NavigationBarItem(
-                    selected = selectedNavIndex == 0,
-                    onClick = { selectedNavIndex = 0 },
-                    icon = { Icon(Icons.Default.Home, "Home") },
-                    label = { Text("Home", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedNavIndex == 1,
-                    onClick = { selectedNavIndex = 1 },
-                    icon = { Icon(Icons.Default.Settings, "Gallery") },
-                    label = { Text("Gallery", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-                NavigationBarItem(
-                    selected = selectedNavIndex == 2,
-                    onClick = { selectedNavIndex = 2 },
-                    icon = { Icon(Icons.Default.Settings, "Settings") },
-                    label = { Text("Settings", style = MaterialTheme.typography.labelMedium) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Secondary,
-                        selectedTextColor = Secondary,
-                        unselectedIconColor = OnSurfaceVariant,
-                        unselectedTextColor = OnSurfaceVariant,
-                        indicatorColor = SecondaryContainer
-                    )
-                )
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNewScan,
-                containerColor = Primary,
-                contentColor = OnPrimary,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp)
-            ) {
-                Icon(Icons.Default.Add, "New scan", modifier = Modifier.size(24.dp))
-            }
         },
         containerColor = Surface
     ) { padding ->
@@ -201,9 +154,51 @@ fun DashboardScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 dashState.recentJobs.forEach { job ->
-                    RecentPrintItem(job = job, onClick = { onRecentJobClick(job) })
+                    RecentPrintItem(
+                        job = job,
+                        onEdit = { onRecentJobClick(job) },
+                        onPrintShare = { handlePrintShare(job) },
+                        onRename = {
+                            renamingJob = job
+                            renameText = job.title
+                        },
+                        onDelete = { viewModel.deleteRecentJob(job.id) }
+                    )
                     Spacer(Modifier.height(8.dp))
                 }
+            }
+
+            renamingJob?.let { job ->
+                AlertDialog(
+                    onDismissRequest = { renamingJob = null },
+                    title = { Text("Rename Print Job", style = MaterialTheme.typography.headlineSmall) },
+                    text = {
+                        OutlinedTextField(
+                            value = renameText,
+                            onValueChange = { renameText = it },
+                            label = { Text("Title") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (renameText.isNotBlank()) {
+                                    viewModel.renameRecentJob(job.id, renameText.trim())
+                                }
+                                renamingJob = null
+                            }
+                        ) {
+                            Text("Save")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { renamingJob = null }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
             Spacer(Modifier.height(80.dp))
@@ -265,26 +260,29 @@ private fun PresetChip(label: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                Icons.Default.Settings,
-                contentDescription = null,
-                tint = Secondary,
-                modifier = Modifier.size(18.dp)
-            )
+            // Removed hardcoded Settings icon here
             Text(label, style = MaterialTheme.typography.labelMedium, color = OnSurface)
         }
     }
 }
 
 @Composable
-private fun RecentPrintItem(job: PrintJob, onClick: () -> Unit) {
+private fun RecentPrintItem(
+    job: PrintJob,
+    onEdit: () -> Unit,
+    onPrintShare: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(SurfaceContainerLowest)
             .border(1.dp, OutlineVariant, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
+            .clickable(onClick = onEdit)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -318,21 +316,64 @@ private fun RecentPrintItem(job: PrintJob, onClick: () -> Unit) {
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "${job.pageCount} page · ${formatSize(job.fileSizeBytes)}",
+                "${job.pageCount} page · ${formatSize(job.fileSizeBytes)} · ${formatDate(job.createdAt)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = OnSurfaceVariant
             )
         }
-        Icon(
-            Icons.Default.Settings,
-            contentDescription = "More options",
-            tint = OnSurfaceVariant,
-            modifier = Modifier.size(24.dp)
-        )
+
+        Box {
+            IconButton(onClick = { menuExpanded = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = OnSurfaceVariant)
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Print / Share") },
+                    leadingIcon = { Icon(Icons.Default.Share, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onPrintShare()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Default.Create, null) },
+                    onClick = {
+                        menuExpanded = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = Error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = Error) },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
+                )
+            }
+        }
     }
 }
 
 private fun formatSize(bytes: Long): String {
     if (bytes == 0L) return "--"
     return if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}
+
+private fun formatDate(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("MMM d, h:mm a", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(timestamp))
 }

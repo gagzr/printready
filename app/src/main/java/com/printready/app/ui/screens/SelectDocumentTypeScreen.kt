@@ -73,9 +73,7 @@ fun SelectDocumentTypeScreen(
                     Text("PrintReady", style = MaterialTheme.typography.headlineMedium, color = Primary)
                 },
                 actions = {
-                    TextButton(onClick = { }) {
-                        Text("Export", color = Primary, style = MaterialTheme.typography.headlineSmall)
-                    }
+                    // Removed unused export button
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
             )
