@@ -411,7 +411,33 @@ private fun DraggableCardItem(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(Modifier.fillMaxSize().background(SurfaceVariant))
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(SurfaceContainerHighest)
+                    .drawBehind {
+                        val stroke = Stroke(
+                            width = 4f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+                        )
+                        drawRect(color = OutlineVariant, style = stroke)
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add image",
+                    tint = Primary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.Text(
+                    text = "Tap to capture side",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = OnSurfaceVariant
+                )
+            }
         }
         // Corner handles when selected
         if (isSelected) {
