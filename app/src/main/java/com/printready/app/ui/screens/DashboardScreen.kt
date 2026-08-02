@@ -17,6 +17,9 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -43,12 +46,14 @@ import com.printready.app.viewmodel.PrintReadyViewModel
 fun DashboardScreen(
     viewModel: PrintReadyViewModel,
     onNewScan: () -> Unit,
+    onNewGallery: () -> Unit,
     onPresetSelected: (DocumentType) -> Unit,
     onRecentJobClick: (PrintJob) -> Unit
 ) {
     val dashState by viewModel.dashboardState.collectAsState()
     val context = LocalContext.current
 
+    var showSourceSheet by remember { mutableStateOf(false) }
     var renamingJob by remember { mutableStateOf<PrintJob?>(null) }
     var renameText by remember { mutableStateOf("") }
 
@@ -115,9 +120,17 @@ fun DashboardScreen(
                     modifier = Modifier.weight(1f),
                     iconBg = Primary,
                     iconLabel = "scan_doc",
-                    title = "Scan or Add Document",
-                    subtitle = "Use camera or select from gallery",
+                    title = "Scan Document",
+                    subtitle = "Use camera with edge detection",
                     onClick = onNewScan
+                )
+                BentoCard(
+                    modifier = Modifier.weight(1f),
+                    iconBg = Secondary,
+                    iconLabel = "gallery",
+                    title = "Upload from Gallery",
+                    subtitle = "Pick images from your phone",
+                    onClick = onNewGallery
                 )
             }
 
@@ -216,11 +229,16 @@ private fun BentoCard(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val icon: ImageVector = when (iconLabel) {
+        "gallery" -> Icons.Default.Image
+        "scan_doc" -> Icons.Default.Camera
+        else -> Icons.Default.Add
+    }
     Card(
         modifier = modifier
             .heightIn(min = 140.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp), // More modern rounded corner
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -229,13 +247,13 @@ private fun BentoCard(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(iconBg.copy(alpha = 0.15f)), // Subtle colored background
+                    .background(iconBg.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    icon,
                     contentDescription = null,
-                    tint = iconBg, // Icon colored same as bg
+                    tint = iconBg,
                     modifier = Modifier.size(28.dp)
                 )
             }

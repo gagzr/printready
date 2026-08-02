@@ -42,6 +42,9 @@ import com.printready.app.viewmodel.PrintReadyViewModel
 
 import android.app.Activity
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
@@ -123,11 +126,28 @@ fun A4WorkspaceScreen(
         }
     }
 
+    val galleryLauncher = rememberLauncherForActivityResult(
+        PickMultipleVisualMedia(maxItems = pageLimitCount.coerceAtLeast(2))
+    ) { uris ->
+        uris.forEachIndexed { index, uri ->
+            if (index == 0 && pendingActionItemId != null) {
+                viewModel.updateItemUri(pendingActionItemId!!, uri)
+            } else {
+                viewModel.addImageToCanvas(uri)
+            }
+        }
+        pendingActionItemId = null
+    }
+
     val startMlKitScan = {
         scanner.getStartScanIntent(context as Activity)
             .addOnSuccessListener { intentSender ->
                 documentScannerLauncher.launch(IntentSenderRequest.Builder(intentSender).build())
             }
+    }
+
+    val startGalleryPick = {
+        galleryLauncher.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
     }
 
     val uCropLauncher = rememberLauncherForActivityResult(
@@ -145,7 +165,11 @@ fun A4WorkspaceScreen(
     // Auto-launch scanner if coming from dashboard fresh
     LaunchedEffect(Unit) {
         if (state.items.all { it.imageUri == null }) {
-            startMlKitScan()
+            if (sourceMode == "gallery") {
+                startGalleryPick()
+            } else {
+                startMlKitScan()
+            }
         }
     }
 
@@ -253,12 +277,12 @@ fun A4WorkspaceScreen(
                         val item = state.items.find { it.id == id }
                         if (item?.imageUri == null) {
                             pendingActionItemId = id
-                            startMlKitScan()
+                            if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
                         } else {
                             viewModel.selectItem(id)
                         }
                     },
-                    onAddImage = { startMlKitScan() },
+                    onAddImage = { if (sourceMode == "gallery") startGalleryPick() else startMlKitScan() },
                     onCropClicked = { id, uri ->
                         val item = state.items.find { it.id == id }
                         val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
@@ -323,7 +347,7 @@ fun A4WorkspaceScreen(
                                     viewModel.setActiveTool(i)
                                     when (i) {
                                         0 -> viewModel.autoFitItems()
-                                        1 -> startMlKitScan()
+                                        1 -> if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
                                         else -> {}
                                     }
                                 }
