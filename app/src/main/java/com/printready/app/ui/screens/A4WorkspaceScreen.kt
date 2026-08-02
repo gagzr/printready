@@ -1,8 +1,25 @@
 package com.printready.app.ui.screens
 
+import android.app.Activity
+import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,9 +31,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocalPrintshop
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,54 +50,39 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import com.printready.app.domain.model.*
-import com.printready.app.ui.theme.*
-import com.printready.app.viewmodel.PrintReadyViewModel
-
-import android.app.Activity
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
-import android.content.Intent
+import com.printready.app.domain.model.*
+import com.printready.app.ui.theme.*
+import com.printready.app.util.PdfPrintDocumentAdapter
+import com.printready.app.viewmodel.PrintReadyViewModel
+import com.printready.app.viewmodel.WorkspaceUiState
 import com.yalantis.ucrop.UCrop
 import java.io.File
+import kotlin.math.roundToInt
 
-import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Refresh
-import android.widget.Toast
-import androidx.core.content.FileProvider
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.foundation.BorderStroke
 private data class WorkspaceTool(val label: String, val icon: ImageVector)
+
 private val WORKSPACE_TOOLS = listOf(
     WorkspaceTool("Auto-Fit", Icons.Default.Settings),
     WorkspaceTool("Add Document", Icons.Default.Add)
 )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun A4WorkspaceScreen(
@@ -90,13 +97,6 @@ fun A4WorkspaceScreen(
 
     var pendingActionItemId by remember { mutableStateOf<String?>(null) }
     var showPrintSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(showPrintSheet) {
-        if (showPrintSheet && state.pdfFile == null && !state.pdfGenerating) {
-            viewModel.generatePdf()
-        }
-    }
-
 
     val pageLimitCount = state.selectedDocType?.sides ?: 1
 
@@ -162,18 +162,11 @@ fun A4WorkspaceScreen(
         }
     }
 
-    // Auto-launch scanner if coming from dashboard fresh
     LaunchedEffect(Unit) {
         if (state.items.all { it.imageUri == null }) {
-            if (sourceMode == "gallery") {
-                startGalleryPick()
-            } else {
-                startMlKitScan()
-            }
+            if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
         }
     }
-
-
 
     Scaffold(
         topBar = {
@@ -206,42 +199,28 @@ fun A4WorkspaceScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.undo() },
-                        enabled = state.canUndo
-                    ) {
+                    IconButton(onClick = { viewModel.undo() }, enabled = state.canUndo) {
                         Icon(
                             Icons.AutoMirrored.Filled.Undo,
                             contentDescription = "Undo",
                             tint = if (state.canUndo) Primary else OnSurfaceVariant.copy(alpha = 0.38f)
                         )
                     }
-                    IconButton(
-                        onClick = { viewModel.redo() },
-                        enabled = state.canRedo
-                    ) {
+                    IconButton(onClick = { viewModel.redo() }, enabled = state.canRedo) {
                         Icon(
                             Icons.AutoMirrored.Filled.Redo,
                             contentDescription = "Redo",
                             tint = if (state.canRedo) Primary else OnSurfaceVariant.copy(alpha = 0.38f)
                         )
                     }
-                    IconButton(
-                        onClick = { viewModel.resetLayout() }
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Reset Layout",
-                            tint = Primary
-                        )
+                    IconButton(onClick = { viewModel.resetLayout() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset Layout", tint = Primary)
                     }
                     TextButton(onClick = { showPrintSheet = true }) {
                         Text("Print & Save", color = Primary, style = MaterialTheme.typography.headlineSmall)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Surface.copy(alpha = 0.9f)
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface.copy(alpha = 0.9f)),
                 modifier = Modifier.shadow(elevation = 2.dp, spotColor = Primary.copy(alpha = 0.1f))
             )
         },
@@ -252,7 +231,6 @@ fun A4WorkspaceScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Canvas area — takes all remaining space
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -269,7 +247,6 @@ fun A4WorkspaceScreen(
                 A4CanvasSheet(
                     items = state.items,
                     selectedItemId = state.selectedItemId,
-                    multiCard = multiCard,
                     onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
                     onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
@@ -282,19 +259,20 @@ fun A4WorkspaceScreen(
                             viewModel.selectItem(id)
                         }
                     },
-                    onAddImage = { if (sourceMode == "gallery") startGalleryPick() else startMlKitScan() },
                     onCropClicked = { id, uri ->
                         val item = state.items.find { it.id == id }
                         val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
+                        val isDoc = item?.documentType?.category == DocumentCategory.DOCUMENT ||
+                                item?.documentType?.category == DocumentCategory.CUSTOM
                         val uCropIntent = UCrop.of(uri, destUri)
                             .withOptions(UCrop.Options().apply {
-                                val isDoc = item?.documentType?.category == com.printready.app.domain.model.DocumentCategory.DOCUMENT || item?.documentType?.category == com.printready.app.domain.model.DocumentCategory.CUSTOM
                                 if (item != null && item.documentType.widthMm > 0f && item.documentType.heightMm > 0f && !isDoc) {
                                     withAspectRatio(item.documentType.widthMm, item.documentType.heightMm)
                                     setFreeStyleCropEnabled(false)
                                 } else {
                                     setFreeStyleCropEnabled(true)
-                                    setAspectRatioOptions(0,
+                                    setAspectRatioOptions(
+                                        0,
                                         com.yalantis.ucrop.model.AspectRatio("Custom", 0f, 0f),
                                         com.yalantis.ucrop.model.AspectRatio("1:1", 1f, 1f),
                                         com.yalantis.ucrop.model.AspectRatio("3:4", 3f, 4f),
@@ -313,13 +291,8 @@ fun A4WorkspaceScreen(
                 )
             }
 
-            // Bottom toolbar
-            Surface(
-                shadowElevation = 4.dp,
-                color = Surface
-            ) {
+            Surface(shadowElevation = 4.dp, color = Surface) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // Margin segmented control
                     MarginSegmentedControl(
                         selected = state.marginPreset,
                         onSelect = { viewModel.setMargin(it) },
@@ -327,10 +300,7 @@ fun A4WorkspaceScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     )
-
                     HorizontalDivider(color = OutlineVariant.copy(alpha = 0.5f))
-
-                    // Tool scroll row
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -348,7 +318,6 @@ fun A4WorkspaceScreen(
                                     when (i) {
                                         0 -> viewModel.autoFitItems()
                                         1 -> if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
-                                        else -> {}
                                     }
                                 }
                             )
@@ -361,35 +330,62 @@ fun A4WorkspaceScreen(
 
     if (showPrintSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showPrintSheet = false },
+            onDismissRequest = {
+                showPrintSheet = false
+                viewModel.clearPdfResult()
+            },
             containerColor = Surface
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("Print & Save PDF", style = MaterialTheme.typography.headlineMedium, color = Primary)
-                Spacer(Modifier.height(16.dp))
-                
-                val docType = state.selectedDocType
-                if (docType != null) {
-                    SpecGrid(
-                        pageSize = "A4 (210 × 297 mm)",
-                        quality = "High (300 DPI)",
-                        scale = "100% Actual Size",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceContainerLowest)
-                            .padding(16.dp)
-                    )
+            PrintExportSheet(
+                state = state,
+                context = context,
+                onGenerate = { viewModel.generatePdf() },
+                onDismiss = {
+                    showPrintSheet = false
+                    viewModel.clearPdfResult()
                 }
-                
-                Spacer(Modifier.height(16.dp))
+            )
+        }
+    }
+}
 
+@Composable
+private fun PrintExportSheet(
+    state: WorkspaceUiState,
+    context: android.content.Context,
+    onGenerate: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val hasImages = state.items.any { it.imageUri != null }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Print & Export PDF",
+            style = MaterialTheme.typography.headlineMedium,
+            color = Primary
+        )
+
+        Spacer(Modifier.height(20.dp))
+
+        SpecGrid(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceContainerLowest)
+                .padding(16.dp)
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        when {
+            // ── ERROR ──────────────────────────────────────────────────────────
+            state.errorMessage != null -> {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -397,84 +393,218 @@ fun A4WorkspaceScreen(
                         .background(ErrorContainer.copy(alpha = 0.2f))
                         .border(1.dp, ErrorContainer, RoundedCornerShape(8.dp))
                         .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Info, null, tint = Error, modifier = Modifier.size(20.dp))
-                    Column {
+                    Text(
+                        state.errorMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OnErrorContainer
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onGenerate,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Retry", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            // ── GENERATING ────────────────────────────────────────────────────
+            state.pdfGenerating -> {
+                Spacer(Modifier.height(8.dp))
+                CircularProgressIndicator(color = Primary, strokeWidth = 3.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Generating high-resolution PDF…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OnSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Rendering at 300 DPI — this may take a moment",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = OnSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+
+            // ── DONE ──────────────────────────────────────────────────────────
+            state.pdfFile != null -> {
+                val file = state.pdfFile
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SecondaryContainer.copy(alpha = 0.4f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Info, null, tint = Secondary, modifier = Modifier.size(18.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Printer scale check required",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = OnErrorContainer
+                            file.name,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = OnSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "Set your printer to print at Actual Size — do not scale to fit.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = OnErrorContainer
+                            "${formatPdfSize(file.length())} · A4 · 300 DPI",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OnSecondaryContainer.copy(alpha = 0.7f)
                         )
                     }
                 }
-                
-                Spacer(Modifier.height(24.dp))
-                
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(ErrorContainer.copy(alpha = 0.15f))
+                        .border(1.dp, ErrorContainer.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Info, null, tint = Error, modifier = Modifier.size(16.dp))
+                    Text(
+                        "Print at Actual Size — do not scale to fit page",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = OnErrorContainer
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // Print via system print dialog
                 Button(
                     onClick = {
-                        state.pdfFile?.let { file ->
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            val intent = Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "application/pdf")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(intent)
-                        }
+                        val fileUri = FileProvider.getUriForFile(
+                            context, "${context.packageName}.fileprovider", file
+                        )
+                        val printManager = context.getSystemService(android.content.Context.PRINT_SERVICE) as PrintManager
+                        printManager.print(
+                            file.nameWithoutExtension,
+                            PdfPrintDocumentAdapter(context, fileUri),
+                            PrintAttributes.Builder()
+                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                .setResolution(PrintAttributes.Resolution("pdf", "pdf", 300, 300))
+                                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                .build()
+                        )
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryContainer),
-                    enabled = state.pdfFile != null && !state.pdfGenerating
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
                 ) {
-                    if (state.pdfGenerating) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = OnPrimary, strokeWidth = 2.dp)
-                    } else {
-                        Text("Print", style = MaterialTheme.typography.headlineSmall, color = OnPrimary)
-                    }
+                    Icon(Icons.Default.LocalPrintshop, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Print", style = MaterialTheme.typography.labelLarge, color = OnPrimary)
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
 
+                // Save to Downloads
                 OutlinedButton(
                     onClick = {
-                        state.pdfFile?.let { file ->
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/pdf"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-                            context.startActivity(Intent.createChooser(intent, "Save PDF"))
-                        }
+                        val saved = savePdfToDownloads(context, file)
+                        Toast.makeText(
+                            context,
+                            if (saved) "Saved to Downloads" else "Could not save to Downloads",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        if (saved) onDismiss()
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, Secondary),
-                    enabled = state.pdfFile != null
+                    border = BorderStroke(1.dp, Secondary)
                 ) {
-                    Text("Save PDF", style = MaterialTheme.typography.headlineSmall, color = Secondary)
+                    Icon(Icons.Default.FileDownload, null, tint = Secondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Save to Downloads", style = MaterialTheme.typography.labelLarge, color = Secondary)
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                // Share
+                TextButton(
+                    onClick = {
+                        val uri = FileProvider.getUriForFile(
+                            context, "${context.packageName}.fileprovider", file
+                        )
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "application/pdf"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share PDF"))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Share PDF", color = OnSurfaceVariant, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            // ── IDLE ──────────────────────────────────────────────────────────
+            else -> {
+                if (!hasImages) {
+                    Text(
+                        "Add at least one image to the canvas before exporting.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OnSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(16.dp))
+                }
+                Button(
+                    onClick = onGenerate,
+                    enabled = hasImages,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                ) {
+                    Text("Generate PDF", style = MaterialTheme.typography.labelLarge, color = OnPrimary)
                 }
             }
         }
     }
 }
 
+private fun savePdfToDownloads(context: android.content.Context, file: File): Boolean = runCatching {
+    val values = ContentValues().apply {
+        put(MediaStore.Downloads.DISPLAY_NAME, file.name)
+        put(MediaStore.Downloads.MIME_TYPE, "application/pdf")
+        put(MediaStore.Downloads.IS_PENDING, 1)
+    }
+    val resolver = context.contentResolver
+    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return false
+    resolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+    values.clear()
+    values.put(MediaStore.Downloads.IS_PENDING, 0)
+    resolver.update(uri, values, null, null)
+    true
+}.getOrDefault(false)
+
+private fun formatPdfSize(bytes: Long): String {
+    if (bytes == 0L) return "--"
+    return if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / (1024.0 * 1024.0))
+}
+
 @Composable
 private fun A4CanvasSheet(
     items: List<CanvasItem>,
     selectedItemId: String?,
-    multiCard: Boolean,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
     onItemScaled: (String, Float, Float, Float, Float?, Float?) -> Unit,
     onItemSelected: (String) -> Unit,
-    onAddImage: () -> Unit,
     onCropClicked: (String, Uri) -> Unit
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -488,7 +618,6 @@ private fun A4CanvasSheet(
             .background(SurfaceContainerLowest)
             .onSizeChanged { canvasSize = it }
     ) {
-        // A4 badge
         Text(
             "A4",
             style = MaterialTheme.typography.labelSmall,
@@ -500,7 +629,6 @@ private fun A4CanvasSheet(
                 .padding(horizontal = 6.dp, vertical = 2.dp)
         )
 
-        // Dashed margin guide
         DashedMarginGuide()
 
         val density = LocalDensity.current
@@ -547,22 +675,21 @@ private fun DraggableCardItem(
 ) {
     var localXMm by remember(item.id, item.offsetXMm) { mutableFloatStateOf(item.offsetXMm) }
     var localYMm by remember(item.id, item.offsetYMm) { mutableFloatStateOf(item.offsetYMm) }
-    
-    val initialEffectiveAspectRatio = item.overrideAspectRatio ?: (item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f))
+
+    val initialEffectiveAspectRatio = item.overrideAspectRatio
+        ?: (item.documentType.widthMm / item.documentType.heightMm.coerceAtLeast(1f))
     val initialHeightMm = item.documentType.widthMm / initialEffectiveAspectRatio
-    
-    var localWidthMm by remember(item.id, item.overrideWidthMm, item.scaleFactor) { 
-        mutableFloatStateOf(item.overrideWidthMm ?: (item.documentType.widthMm * item.scaleFactor)) 
+
+    var localWidthMm by remember(item.id, item.overrideWidthMm, item.scaleFactor) {
+        mutableFloatStateOf(item.overrideWidthMm ?: (item.documentType.widthMm * item.scaleFactor))
     }
-    var localHeightMm by remember(item.id, item.overrideHeightMm, item.scaleFactor) { 
-        mutableFloatStateOf(item.overrideHeightMm ?: (initialHeightMm * item.scaleFactor)) 
+    var localHeightMm by remember(item.id, item.overrideHeightMm, item.scaleFactor) {
+        mutableFloatStateOf(item.overrideHeightMm ?: (initialHeightMm * item.scaleFactor))
     }
 
     val effectiveAspectRatio = localWidthMm / localHeightMm.coerceAtLeast(1f)
-
     val rawW = (localWidthMm * scaleW).roundToInt()
     val itemWidthDp = with(density) { rawW.toDp() }
-
     val xPx = (localXMm * scaleW).roundToInt()
     val yPx = (localYMm * scaleH).roundToInt()
 
@@ -584,16 +711,9 @@ private fun DraggableCardItem(
             )
             .pointerInput(item.id, canvasSize) {
                 detectDragGestures(
-                    onDragStart = {
-                        onDragStarted()
-                        onSelect()
-                    },
-                    onDragEnd = {
-                        onItemMoved(item.id, localXMm, localYMm)
-                    },
-                    onDragCancel = {
-                        onItemMoved(item.id, localXMm, localYMm)
-                    },
+                    onDragStart = { onDragStarted(); onSelect() },
+                    onDragEnd = { onItemMoved(item.id, localXMm, localYMm) },
+                    onDragCancel = { onItemMoved(item.id, localXMm, localYMm) },
                     onDrag = { change, dragAmount ->
                         change.consume()
                         if (canvasSize.width > 0 && canvasSize.height > 0) {
@@ -627,11 +747,13 @@ private fun DraggableCardItem(
                     .fillMaxSize()
                     .background(SurfaceContainerHighest)
                     .drawBehind {
-                        val stroke = Stroke(
-                            width = 4f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+                        drawRect(
+                            color = OutlineVariant,
+                            style = Stroke(
+                                width = 4f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f), 0f)
+                            )
                         )
-                        drawRect(color = OutlineVariant, style = stroke)
                     },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -643,65 +765,60 @@ private fun DraggableCardItem(
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                androidx.compose.material3.Text(
+                Text(
                     text = labelText,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = Primary
                 )
-                androidx.compose.material3.Text(
+                Text(
                     text = "Tap to capture",
                     style = MaterialTheme.typography.labelSmall,
                     color = OnSurfaceVariant
                 )
             }
         }
-        // Corner handles when selected
+
         if (isSelected) {
             CornerHandles(
                 onScaleStart = { onDragStarted() },
                 onScaleDelta = { corner, dragAmountPx ->
                     val dxMm = dragAmountPx.x / scaleW
                     val dyMm = dragAmountPx.y / scaleH
-                    
-                    var dw = 0f
-                    var dh = 0f
-                    var moveX = 0f
-                    var moveY = 0f
-
+                    var dw: Float
+                    var dh: Float
+                    var moveX: Float
+                    var moveY: Float
                     when (corner) {
                         Corner.TopLeft -> { dw = -dxMm; dh = -dyMm; moveX = dxMm; moveY = dyMm }
-                        Corner.TopRight -> { dw = dxMm; dh = -dyMm; moveY = dyMm }
-                        Corner.BottomLeft -> { dw = -dxMm; dh = dyMm; moveX = dxMm }
-                        Corner.BottomRight -> { dw = dxMm; dh = dyMm }
+                        Corner.TopRight -> { dw = dxMm; dh = -dyMm; moveY = dyMm; moveX = 0f }
+                        Corner.BottomLeft -> { dw = -dxMm; dh = dyMm; moveX = dxMm; moveY = 0f }
+                        Corner.BottomRight -> { dw = dxMm; dh = dyMm; moveX = 0f; moveY = 0f }
                     }
-
                     if (localWidthMm + dw >= 10f && localHeightMm + dh >= 10f) {
-                        localWidthMm += dw
-                        localHeightMm += dh
-                        localXMm += moveX
-                        localYMm += moveY
+                        localWidthMm += dw; localHeightMm += dh
+                        localXMm += moveX; localYMm += moveY
                     }
                 },
                 onScaleEnd = {
                     onItemScaled(item.id, 1f, localXMm, localYMm, localWidthMm, localHeightMm)
                 }
             )
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isSelected && item.imageUri != null,
-                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
-                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+            AnimatedVisibility(
+                visible = item.imageUri != null,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
                 modifier = Modifier.align(Alignment.Center)
             ) {
-                androidx.compose.material3.FilledTonalButton(
+                FilledTonalButton(
                     onClick = { item.imageUri?.let { onCropClicked(it) } },
-                    colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                    colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-                    elevation = androidx.compose.material3.ButtonDefaults.filledTonalButtonElevation(defaultElevation = 4.dp)
+                    elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 4.dp)
                 ) {
-                    androidx.compose.material3.Text("Crop & Edit")
+                    Text("Crop & Edit")
                 }
             }
         }
@@ -758,17 +875,18 @@ private fun CornerHandles(
 
 @Composable
 private fun DashedMarginGuide() {
-    val color = OutlineVariant.copy(alpha = 0.6f)
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
             .drawBehind {
-                val stroke = Stroke(
-                    width = 1.5f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                drawRect(
+                    color = OutlineVariant.copy(alpha = 0.6f),
+                    style = Stroke(
+                        width = 1.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                    )
                 )
-                drawRect(color = color, style = stroke)
             }
     )
 }
@@ -793,7 +911,7 @@ private fun MarginSegmentedControl(
                     .weight(1f)
                     .clip(RoundedCornerShape(4.dp))
                     .background(if (isSelected) PrimaryContainer else Color.Transparent)
-                    .clickableNoPull { onSelect(preset) }
+                    .clickable { onSelect(preset) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -814,7 +932,7 @@ private fun ToolButton(label: String, icon: ImageVector, isActive: Boolean, onCl
     Column(
         modifier = Modifier
             .widthIn(min = 72.dp)
-            .clickableNoPull(onClick = onClick),
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -842,9 +960,6 @@ private fun ToolButton(label: String, icon: ImageVector, isActive: Boolean, onCl
 
 private fun Modifier.drawAlignmentGrid(): Modifier = this.drawBehind {
     val step = size.width * 0.1f
-    val paint = androidx.compose.ui.graphics.Paint().also {
-        it.color = Color(0xFF43474E).copy(alpha = 0.08f)
-    }
     var x = 0f
     while (x <= size.width) {
         drawLine(Color(0xFF43474E).copy(alpha = 0.08f), Offset(x, 0f), Offset(x, size.height), 1f)
@@ -857,23 +972,14 @@ private fun Modifier.drawAlignmentGrid(): Modifier = this.drawBehind {
     }
 }
 
-// Simple clickable alias
-private fun Modifier.clickableNoPull(onClick: () -> Unit): Modifier =
-    this.clickable(onClick = onClick)
-
 @Composable
-private fun SpecGrid(
-    pageSize: String,
-    quality: String,
-    scale: String,
-    modifier: Modifier = Modifier
-) {
+private fun SpecGrid(modifier: Modifier = Modifier) {
     Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceEvenly) {
-        SpecCell(label = "PAGE SIZE", value = pageSize)
+        SpecCell(label = "PAGE SIZE", value = "A4 (210 × 297 mm)")
         VerticalDivider(color = OutlineVariant, modifier = Modifier.height(48.dp))
-        SpecCell(label = "QUALITY", value = quality)
+        SpecCell(label = "QUALITY", value = "High (300 DPI)")
         VerticalDivider(color = OutlineVariant, modifier = Modifier.height(48.dp))
-        SpecCell(label = "SCALE", value = scale)
+        SpecCell(label = "SCALE", value = "100% Actual Size")
     }
 }
 
