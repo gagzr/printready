@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -233,12 +235,21 @@ fun A4WorkspaceScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            var zoomScale by remember { mutableFloatStateOf(1f) }
+            var panOffset by remember { mutableStateOf(Offset.Zero) }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .background(SurfaceContainerLow)
                     .drawAlignmentGrid()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            zoomScale = (zoomScale * zoom).coerceIn(0.5f, 5f)
+                            panOffset += pan
+                        }
+                    }
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -246,8 +257,16 @@ fun A4WorkspaceScreen(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                A4CanvasSheet(
-                    items = state.items,
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = zoomScale
+                        scaleY = zoomScale
+                        translationX = panOffset.x
+                        translationY = panOffset.y
+                    }
+                ) {
+                    A4CanvasSheet(
+                        items = state.items,
                     selectedItemId = state.selectedItemId,
                     onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
                     onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
@@ -291,6 +310,7 @@ fun A4WorkspaceScreen(
                         uCropLauncher.launch(uCropIntent)
                     }
                 )
+                }
             }
 
             Surface(shadowElevation = 4.dp, color = Surface) {
