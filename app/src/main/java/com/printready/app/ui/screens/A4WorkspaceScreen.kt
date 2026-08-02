@@ -24,10 +24,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -224,7 +226,9 @@ fun A4WorkspaceScreen(
                 .padding(padding)
         ) {
             var zoomScale by remember { mutableFloatStateOf(1f) }
-            var panOffset by remember { mutableStateOf(Offset.Zero) }
+            val transformState = rememberTransformableState { zoomChange, _, _ ->
+                zoomScale = (zoomScale * zoomChange).coerceIn(0.5f, 5f)
+            }
 
             Box(
                 modifier = Modifier
@@ -232,12 +236,7 @@ fun A4WorkspaceScreen(
                     .fillMaxWidth()
                     .background(SurfaceContainerLow)
                     .drawAlignmentGrid()
-                    .pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            zoomScale = (zoomScale * zoom).coerceIn(0.5f, 5f)
-                            panOffset += pan
-                        }
-                    }
+                    .transformable(state = transformState)
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                         indication = null,
@@ -246,14 +245,18 @@ fun A4WorkspaceScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = zoomScale
-                        scaleY = zoomScale
-                        translationX = panOffset.x
-                        translationY = panOffset.y
-                    }
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .horizontalScroll(rememberScrollState())
                 ) {
                     Column(
+                        modifier = Modifier
+                            .padding(vertical = 32.dp, horizontal = 16.dp)
+                            .graphicsLayer {
+                                scaleX = zoomScale
+                                scaleY = zoomScale
+                            },
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(32.dp)
                     ) {

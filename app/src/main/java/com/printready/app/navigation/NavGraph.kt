@@ -17,11 +17,18 @@ object Routes {
 }
 
 @Composable
-fun PrintReadyNavGraph() {
+fun PrintReadyNavGraph(sharedUris: List<android.net.Uri> = emptyList()) {
     val navController = rememberNavController()
     val viewModel: PrintReadyViewModel = viewModel()
 
-    NavHost(navController = navController, startDestination = Routes.DASHBOARD) {
+    // If we have shared URIs, we start at select_doc_type and store the uris in the ViewModel
+    val startDestination = if (sharedUris.isNotEmpty()) {
+        "select_doc_type/shared"
+    } else {
+        Routes.DASHBOARD
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
         composable(Routes.DASHBOARD) {
             androidx.compose.runtime.LaunchedEffect(Unit) {
                 viewModel.clearWorkspace()
@@ -45,9 +52,24 @@ fun PrintReadyNavGraph() {
             arguments = listOf(navArgument("sourceMode") { type = NavType.StringType })
         ) { backStack ->
             val sourceMode = backStack.arguments?.getString("sourceMode") ?: "scan"
+            
+            androidx.compose.runtime.LaunchedEffect(sharedUris) {
+                if (sourceMode == "shared" && sharedUris.isNotEmpty()) {
+                    viewModel.setPendingSharedUris(sharedUris)
+                }
+            }
+
             SelectDocumentTypeScreen(
                 viewModel = viewModel,
-                onBack = { navController.popBackStack() },
+                onBack = { 
+                    if (navController.previousBackStackEntry == null) {
+                        navController.navigate(Routes.DASHBOARD) {
+                            popUpTo(0)
+                        }
+                    } else {
+                        navController.popBackStack() 
+                    }
+                },
                 onDocTypeSelected = { docType ->
                     viewModel.selectDocumentType(docType)
                     navController.navigate("workspace/$sourceMode")

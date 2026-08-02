@@ -184,6 +184,12 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    private var pendingSharedUris: List<Uri> = emptyList()
+
+    fun setPendingSharedUris(uris: List<Uri>) {
+        pendingSharedUris = uris
+    }
+
     fun selectDocumentType(type: DocumentType) {
         undoStack.clear()
         redoStack.clear()
@@ -203,6 +209,13 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         }
 
         _workspaceState.update { it.copy(selectedDocType = type, items = initialItems, selectedItemId = null, canUndo = false, canRedo = false) }
+
+        // Consume pending shared URIs if any
+        if (pendingSharedUris.isNotEmpty()) {
+            val urisToProcess = pendingSharedUris
+            pendingSharedUris = emptyList()
+            urisToProcess.forEach { addImageToCanvas(it) }
+        }
     }
 
     fun selectItem(itemId: String?) {
