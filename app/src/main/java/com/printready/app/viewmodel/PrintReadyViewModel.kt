@@ -373,6 +373,14 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun updateItemAdjustments(itemId: String, brightness: Float, contrast: Float, grayscale: Boolean) {
+        _workspaceState.update { state ->
+            state.copy(items = state.items.map {
+                if (it.id == itemId) it.copy(brightness = brightness, contrast = contrast, grayscale = grayscale) else it
+            })
+        }
+    }
+
     fun renameRecentJob(jobId: String, newTitle: String) {
         _dashboardState.update { ds ->
             ds.copy(recentJobs = ds.recentJobs.map {

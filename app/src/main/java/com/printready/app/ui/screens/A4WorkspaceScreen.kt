@@ -48,6 +48,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -293,6 +295,21 @@ fun A4WorkspaceScreen(
 
             Surface(shadowElevation = 4.dp, color = Surface) {
                 Column(modifier = Modifier.fillMaxWidth()) {
+                    // Adjust panel — shown when a filled item is selected
+                    val selectedItem = state.items.find { it.id == state.selectedItemId && it.imageUri != null }
+                    if (selectedItem != null) {
+                        HorizontalDivider(color = OutlineVariant.copy(alpha = 0.5f))
+                        AdjustPanel(
+                            item = selectedItem,
+                            onAdjust = { b, c, g ->
+                                viewModel.updateItemAdjustments(selectedItem.id, b, c, g)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                    HorizontalDivider(color = OutlineVariant.copy(alpha = 0.5f))
                     MarginSegmentedControl(
                         selected = state.marginPreset,
                         onSelect = { viewModel.setMargin(it) },
@@ -577,6 +594,112 @@ private fun PrintExportSheet(
     }
 }
 
+private fun buildPreviewColorFilter(brightness: Float, contrast: Float, grayscale: Boolean): ColorFilter? {
+    val isNeutral = brightness == 0f && contrast == 1f && !grayscale
+    if (isNeutral) return null
+
+    val c = contrast
+    val t = (1f - c) * 128f
+    val b = brightness * 255f
+    val offset = t + b
+
+    val matrix = if (grayscale) {
+        val rw = 0.299f
+        val gw = 0.587f
+        val bw = 0.114f
+        floatArrayOf(
+            c * rw, c * gw, c * bw, 0f, offset,
+            c * rw, c * gw, c * bw, 0f, offset,
+            c * rw, c * gw, c * bw, 0f, offset,
+            0f, 0f, 0f, 1f, 0f
+        )
+    } else {
+        floatArrayOf(
+            c, 0f, 0f, 0f, offset,
+            0f, c, 0f, 0f, offset,
+            0f, 0f, c, 0f, offset,
+            0f, 0f, 0f, 1f, 0f
+        )
+    }
+
+    return ColorFilter.colorMatrix(ColorMatrix(matrix))
+}
+
+@Composable
+private fun AdjustPanel(
+    item: CanvasItem,
+    onAdjust: (brightness: Float, contrast: Float, grayscale: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                "Adjust",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = OnSurface
+            )
+            FilterChip(
+                selected = item.grayscale,
+                onClick = { onAdjust(item.brightness, item.contrast, !item.grayscale) },
+                label = { Text("Grayscale", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = PrimaryContainer,
+                    selectedLabelColor = OnPrimaryContainer
+                )
+            )
+        }
+
+        SliderRow(
+            label = "Brightness",
+            value = item.brightness,
+            valueRange = -1f..1f,
+            onValueChange = { onAdjust(it, item.contrast, item.grayscale) }
+        )
+        SliderRow(
+            label = "Contrast",
+            value = item.contrast,
+            valueRange = 0.5f..2f,
+            onValueChange = { onAdjust(item.brightness, it, item.grayscale) }
+        )
+    }
+}
+
+@Composable
+private fun SliderRow(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = OnSurfaceVariant,
+            modifier = Modifier.width(70.dp)
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            modifier = Modifier.weight(1f),
+            colors = SliderDefaults.colors(
+                thumbColor = Primary,
+                activeTrackColor = Primary,
+                inactiveTrackColor = SurfaceContainerHigh
+            )
+        )
+    }
+}
+
 private fun savePdfToDownloads(context: android.content.Context, file: File): Boolean = runCatching {
     val values = ContentValues().apply {
         put(MediaStore.Downloads.DISPLAY_NAME, file.name)
@@ -733,6 +856,7 @@ private fun DraggableCardItem(
                 model = item.imageUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = buildPreviewColorFilter(item.brightness, item.contrast, item.grayscale),
                 modifier = Modifier.fillMaxSize()
             )
         } else {

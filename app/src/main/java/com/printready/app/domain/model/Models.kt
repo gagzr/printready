@@ -44,7 +44,11 @@ data class CanvasItem(
     val rotationDeg: Float = 0f,
     val overrideAspectRatio: Float? = null,
     val overrideWidthMm: Float? = null,
-    val overrideHeightMm: Float? = null
+    val overrideHeightMm: Float? = null,
+    // Image adjustments — non-destructive, applied at render time
+    val brightness: Float = 0f,   // -1f (black) .. 0f (neutral) .. 1f (white)
+    val contrast: Float = 1f,     // 0.5f (flat) .. 1f (neutral) .. 2f (punchy)
+    val grayscale: Boolean = false
 )
 
 data class PrintJob(
