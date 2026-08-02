@@ -35,6 +35,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalPrintshop
@@ -267,50 +269,53 @@ fun A4WorkspaceScreen(
                 ) {
                     A4CanvasSheet(
                         items = state.items,
-                    selectedItemId = state.selectedItemId,
-                    onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
-                    onItemMoved = { id, dx, dy -> viewModel.updateItemPosition(id, dx, dy) },
-                    onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
-                    onItemSelected = { id ->
-                        val item = state.items.find { it.id == id }
-                        if (item?.imageUri == null) {
-                            pendingActionItemId = id
-                            if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
-                        } else {
-                            viewModel.selectItem(id)
-                        }
-                    },
-                    onCropClicked = { id, uri ->
-                        val item = state.items.find { it.id == id }
-                        val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
-                        val isDoc = item?.documentType?.category == DocumentCategory.DOCUMENT ||
-                                item?.documentType?.category == DocumentCategory.CUSTOM
-                        val uCropIntent = UCrop.of(uri, destUri)
-                            .withOptions(UCrop.Options().apply {
-                                if (item != null && item.documentType.widthMm > 0f && item.documentType.heightMm > 0f && !isDoc) {
-                                    withAspectRatio(item.documentType.widthMm, item.documentType.heightMm)
-                                    setFreeStyleCropEnabled(false)
-                                } else {
-                                    setFreeStyleCropEnabled(true)
-                                    setAspectRatioOptions(
-                                        0,
-                                        com.yalantis.ucrop.model.AspectRatio("Custom", 0f, 0f),
-                                        com.yalantis.ucrop.model.AspectRatio("1:1", 1f, 1f),
-                                        com.yalantis.ucrop.model.AspectRatio("3:4", 3f, 4f),
-                                        com.yalantis.ucrop.model.AspectRatio("3:2", 3f, 2f),
-                                        com.yalantis.ucrop.model.AspectRatio("16:9", 16f, 9f)
-                                    )
-                                }
-                                setHideBottomControls(false)
-                                setToolbarTitle("Crop Image")
-                                setCompressionQuality(100)
-                            })
-                            .getIntent(context)
-                        viewModel.selectItem(id)
-                        uCropLauncher.launch(uCropIntent)
-                    }
-                )
+                        selectedItemId = state.selectedItemId,
+                        canvasGrayscale = state.canvasGrayscale,
+                        onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
+                        onItemMoved = { id, dx, dy -> viewModel.updateItemScaleAndPosition(id, 1f, dx, dy) },
+                        onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
+                        onItemSelected = { id ->
+                            val item = state.items.find { it.id == id }
+                            if (item?.imageUri == null) {
+                                pendingActionItemId = id
+                                if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
+                            } else {
+                                viewModel.selectItem(id)
+                            }
+                        },
+                        onCropClicked = { _, _ -> }
+                    )
                 }
+            }
+
+            val handleCropClick: (String, Uri) -> Unit = { id, uri ->
+                val item = state.items.find { it.id == id }
+                val destUri = Uri.fromFile(File(context.cacheDir, "crop_${System.currentTimeMillis()}.jpg"))
+                val isDoc = item?.documentType?.category == DocumentCategory.DOCUMENT ||
+                        item?.documentType?.category == DocumentCategory.CUSTOM
+                val uCropIntent = UCrop.of(uri, destUri)
+                    .withOptions(UCrop.Options().apply {
+                        if (item != null && item.documentType.widthMm > 0f && item.documentType.heightMm > 0f && !isDoc) {
+                            withAspectRatio(item.documentType.widthMm, item.documentType.heightMm)
+                            setFreeStyleCropEnabled(false)
+                        } else {
+                            setFreeStyleCropEnabled(true)
+                            setAspectRatioOptions(
+                                0,
+                                com.yalantis.ucrop.model.AspectRatio("Custom", 0f, 0f),
+                                com.yalantis.ucrop.model.AspectRatio("1:1", 1f, 1f),
+                                com.yalantis.ucrop.model.AspectRatio("3:4", 3f, 4f),
+                                com.yalantis.ucrop.model.AspectRatio("3:2", 3f, 2f),
+                                com.yalantis.ucrop.model.AspectRatio("16:9", 16f, 9f)
+                            )
+                        }
+                        setHideBottomControls(false)
+                        setToolbarTitle("Crop Image")
+                        setCompressionQuality(100)
+                    })
+                    .getIntent(context)
+                viewModel.selectItem(id)
+                uCropLauncher.launch(uCropIntent)
             }
 
             Surface(shadowElevation = 4.dp, color = Surface) {
@@ -324,9 +329,35 @@ fun A4WorkspaceScreen(
                             onAdjust = { b, c, g ->
                                 viewModel.updateItemAdjustments(selectedItem.id, b, c, g)
                             },
+                            onCropClick = {
+                                selectedItem.imageUri?.let { uri ->
+                                    handleCropClick(selectedItem.id, uri)
+                                }
+                            },
+                            onDeleteClick = {
+                                viewModel.removeItem(selectedItem.id)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                    HorizontalDivider(color = OutlineVariant.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Print in Grayscale",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OnSurface
+                        )
+                        androidx.compose.material3.Switch(
+                            checked = state.canvasGrayscale,
+                            onCheckedChange = { viewModel.toggleCanvasGrayscale() }
                         )
                     }
                     HorizontalDivider(color = OutlineVariant.copy(alpha = 0.5f))
@@ -649,19 +680,29 @@ private fun buildPreviewColorFilter(brightness: Float, contrast: Float, grayscal
 private fun AdjustPanel(
     item: CanvasItem,
     onAdjust: (brightness: Float, contrast: Float, grayscale: Boolean) -> Unit,
+    onCropClick: () -> Unit,
+    onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 "Adjust",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = OnSurface
             )
+            Spacer(Modifier.weight(1f))
+            
+            IconButton(onClick = onCropClick) {
+                Icon(Icons.Default.Crop, contentDescription = "Crop Image", tint = Primary)
+            }
+            IconButton(onClick = onDeleteClick) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete Image", tint = MaterialTheme.colorScheme.error)
+            }
+
             FilterChip(
                 selected = item.grayscale,
                 onClick = { onAdjust(item.brightness, item.contrast, !item.grayscale) },
@@ -744,6 +785,7 @@ private fun formatPdfSize(bytes: Long): String {
 private fun A4CanvasSheet(
     items: List<CanvasItem>,
     selectedItemId: String?,
+    canvasGrayscale: Boolean,
     onDragStarted: () -> Unit,
     onItemMoved: (String, Float, Float) -> Unit,
     onItemScaled: (String, Float, Float, Float, Float?, Float?) -> Unit,
@@ -785,6 +827,7 @@ private fun A4CanvasSheet(
                 itemIndex = index,
                 totalItems = totalItems,
                 isSelected = item.id == selectedItemId,
+                canvasGrayscale = canvasGrayscale,
                 scaleW = scaleW,
                 scaleH = scaleH,
                 canvasSize = canvasSize,
@@ -805,6 +848,7 @@ private fun DraggableCardItem(
     itemIndex: Int,
     totalItems: Int,
     isSelected: Boolean,
+    canvasGrayscale: Boolean,
     scaleW: Float,
     scaleH: Float,
     canvasSize: IntSize,
@@ -876,7 +920,7 @@ private fun DraggableCardItem(
                 model = item.imageUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                colorFilter = buildPreviewColorFilter(item.brightness, item.contrast, item.grayscale),
+                colorFilter = buildPreviewColorFilter(item.brightness, item.contrast, item.grayscale || canvasGrayscale),
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -948,23 +992,7 @@ private fun DraggableCardItem(
                     onItemScaled(item.id, 1f, localXMm, localYMm, localWidthMm, localHeightMm)
                 }
             )
-            AnimatedVisibility(
-                visible = item.imageUri != null,
-                enter = fadeIn() + scaleIn(),
-                exit = fadeOut() + scaleOut(),
-                modifier = Modifier.align(Alignment.Center)
-            ) {
-                FilledTonalButton(
-                    onClick = { item.imageUri?.let { onCropClicked(it) } },
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    elevation = ButtonDefaults.filledTonalButtonElevation(defaultElevation = 4.dp)
-                ) {
-                    Text("Crop & Edit")
-                }
-            }
+
         }
     }
 }

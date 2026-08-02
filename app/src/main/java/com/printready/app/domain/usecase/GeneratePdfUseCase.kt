@@ -32,7 +32,7 @@ class GeneratePdfUseCase(private val context: Context) {
         canvas.drawRect(0f, 0f, pageWidthPx.toFloat(), pageHeightPx.toFloat(), bgPaint)
 
         for (item in job.items) {
-            drawItem(canvas, item)
+            drawItem(canvas, item, job.grayscale)
         }
 
         document.finishPage(page)
@@ -46,7 +46,7 @@ class GeneratePdfUseCase(private val context: Context) {
         return A4.mmToPx(mm)
     }
 
-    private fun drawItem(canvas: Canvas, item: CanvasItem) {
+    private fun drawItem(canvas: Canvas, item: CanvasItem, isGlobalGrayscale: Boolean) {
         val uri: Uri = item.imageUri ?: return
         val bitmap: Bitmap = loadBitmap(uri) ?: return
 
@@ -65,7 +65,7 @@ class GeneratePdfUseCase(private val context: Context) {
         }
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-        paint.colorFilter = buildColorFilter(item.brightness, item.contrast, item.grayscale)
+        paint.colorFilter = buildColorFilter(item.brightness, item.contrast, item.grayscale || isGlobalGrayscale)
 
         val saved = canvas.save()
         val pivotX = leftPx + targetWidthPx / 2f

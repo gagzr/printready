@@ -26,7 +26,8 @@ data class WorkspaceUiState(
     val pdfFile: File? = null,
     val errorMessage: String? = null,
     val canUndo: Boolean = false,
-    val canRedo: Boolean = false
+    val canRedo: Boolean = false,
+    val canvasGrayscale: Boolean = false
 )
 
 data class DashboardUiState(
@@ -121,6 +122,12 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         redoStack.clear()
         _workspaceState.value = WorkspaceUiState()
         _selectedDocType.value = null
+    }
+
+    fun toggleCanvasGrayscale() {
+        _workspaceState.update {
+            it.copy(canvasGrayscale = !it.canvasGrayscale)
+        }
     }
 
     private fun calculateSkeletonPosition(
@@ -256,6 +263,14 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         pushUndoSnapshot()
     }
 
+    fun removeItem(itemId: String) {
+        pushUndoSnapshot()
+        _workspaceState.update { state ->
+            val newItems = state.items.map { if (it.id == itemId) it.copy(imageUri = null, brightness = 0f, contrast = 1f, grayscale = false) else it }
+            state.copy(items = newItems, selectedItemId = null)
+        }
+    }
+
     fun updateItemPosition(itemId: String, offsetXMm: Float, offsetYMm: Float) {
         _workspaceState.update { state ->
             state.copy(items = state.items.map {
@@ -300,7 +315,8 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
                 documentType = state.selectedDocType ?: DefaultDocumentTypes.first(),
                 items = state.items,
                 marginMm = state.marginPreset.mm,
-                pdfFilePath = outFile.absolutePath
+                pdfFilePath = outFile.absolutePath,
+                grayscale = state.canvasGrayscale
             )
 
             val result = generatePdf.execute(job, outFile)
