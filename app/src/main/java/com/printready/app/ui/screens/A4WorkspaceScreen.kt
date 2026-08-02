@@ -215,7 +215,10 @@ fun A4WorkspaceScreen(
                         Text("Print & Save", color = Primary, style = MaterialTheme.typography.headlineSmall)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Surface.copy(alpha = 0.9f)
+                ),
+                modifier = Modifier.shadow(elevation = 2.dp, spotColor = Primary.copy(alpha = 0.1f))
             )
         },
         containerColor = SurfaceContainerLow

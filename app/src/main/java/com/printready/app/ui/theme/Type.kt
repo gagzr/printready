@@ -6,16 +6,19 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.printready.app.R
 
-// Inter loaded via downloadable font fallback — bundle Inter TTF files in res/font/ for offline use.
-// For now we rely on the system default sans-serif which maps to Roboto on Android.
-// To use Inter: add font files to res/font/ and reference them here.
-val InterFamily = FontFamily.SansSerif
+val AppFontFamily = FontFamily(
+    Font(R.font.inter, FontWeight.Normal),
+    Font(R.font.inter, FontWeight.Medium),
+    Font(R.font.inter, FontWeight.SemiBold),
+    Font(R.font.inter, FontWeight.Bold)
+)
 
 val AppTypography = Typography(
     // headline-lg  28/34 bold
     headlineLarge = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 28.sp,
         lineHeight = 34.sp,
@@ -23,7 +26,7 @@ val AppTypography = Typography(
     ),
     // headline-md  20/28 semibold — app bar title
     headlineMedium = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 20.sp,
         lineHeight = 28.sp,
@@ -31,7 +34,7 @@ val AppTypography = Typography(
     ),
     // headline-sm  16/24 semibold — card titles
     headlineSmall = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -39,7 +42,7 @@ val AppTypography = Typography(
     ),
     // body-lg  16/24 regular
     bodyLarge = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -47,7 +50,7 @@ val AppTypography = Typography(
     ),
     // body-md  14/20 regular
     bodyMedium = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
@@ -55,7 +58,7 @@ val AppTypography = Typography(
     ),
     // label-md  12/16 medium — chip/nav labels
     labelMedium = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -63,7 +66,7 @@ val AppTypography = Typography(
     ),
     // label-sm  11/14 semibold — badges
     labelSmall = TextStyle(
-        fontFamily = InterFamily,
+        fontFamily = AppFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 11.sp,
         lineHeight = 14.sp,

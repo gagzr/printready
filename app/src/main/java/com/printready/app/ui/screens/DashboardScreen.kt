@@ -69,18 +69,19 @@ fun DashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Text(
                         "PrintReady",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
                         color = Primary
                     )
                 },
-                actions = {
-                    // Removed unused profile icon placeholder
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Surface.copy(alpha = 0.9f),
+                    scrolledContainerColor = Surface
+                ),
+                modifier = Modifier.shadow(elevation = 2.dp, spotColor = Primary.copy(alpha = 0.1f))
             )
         },
         containerColor = Surface
@@ -219,28 +220,28 @@ private fun BentoCard(
         modifier = modifier
             .heightIn(min = 140.dp)
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(24.dp), // More modern rounded corner
         colors = CardDefaults.cardColors(containerColor = SurfaceContainerLowest),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
-                    .background(iconBg),
+                    .background(iconBg.copy(alpha = 0.15f)), // Subtle colored background
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Default.Add,
                     contentDescription = null,
-                    tint = OnPrimary,
-                    modifier = Modifier.size(24.dp)
+                    tint = iconBg, // Icon colored same as bg
+                    modifier = Modifier.size(28.dp)
                 )
             }
-            Spacer(Modifier.height(12.dp))
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = OnSurface)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(16.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold), color = OnSurface)
+            Spacer(Modifier.height(6.dp))
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = OnSurfaceVariant)
         }
     }
@@ -250,18 +251,17 @@ private fun BentoCard(
 private fun PresetChip(label: String, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp), // More modern
         color = SurfaceContainerLowest,
-        shadowElevation = 1.dp,
-        border = BorderStroke(1.dp, OutlineVariant),
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, OutlineVariant.copy(alpha = 0.5f)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Removed hardcoded Settings icon here
-            Text(label, style = MaterialTheme.typography.labelMedium, color = OnSurface)
+            Text(label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = OnSurface)
         }
     }
 }
@@ -279,21 +279,21 @@ private fun RecentPrintItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(SurfaceContainerLowest)
-            .border(1.dp, OutlineVariant, RoundedCornerShape(8.dp))
+            .border(1.dp, OutlineVariant.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .clickable(onClick = onEdit)
-            .padding(12.dp),
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // A4 thumbnail
         Box(
             modifier = Modifier
-                .width(48.dp)
-                .height(64.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(SurfaceContainerLowest)
-                .border(1.dp, OutlineVariant, RoundedCornerShape(4.dp)),
+                .width(54.dp)
+                .height(72.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceContainer)
+                .border(1.dp, OutlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.TopStart
         ) {
             Text(
@@ -301,15 +301,15 @@ private fun RecentPrintItem(
                 style = MaterialTheme.typography.labelSmall,
                 color = OnSurfaceVariant,
                 modifier = Modifier
-                    .background(SurfaceContainer, RoundedCornerShape(2.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .background(SurfaceContainerHigh, RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             )
         }
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 job.title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                 color = OnSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -317,7 +317,7 @@ private fun RecentPrintItem(
             Spacer(Modifier.height(4.dp))
             Text(
                 "${job.pageCount} page · ${formatSize(job.fileSizeBytes)} · ${formatDate(job.createdAt)}",
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 color = OnSurfaceVariant
             )
         }
