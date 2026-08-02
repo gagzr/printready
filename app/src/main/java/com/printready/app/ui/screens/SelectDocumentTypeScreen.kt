@@ -121,7 +121,7 @@ fun SelectDocumentTypeScreen(
                 contentPadding = PaddingValues(bottom = 32.dp)
             ) {
                 items(filtered.dropLast(1)) { docType ->
-                    DocTypeCard(docType = docType, onClick = { onDocTypeSelected(docType) }) // Default to scan here for now, or might need to pass sourceMode to this screen
+                    DocTypeCard(docType = docType, onClick = { onDocTypeSelected(docType) })
                 }
                 // Custom size — full width
                 item(span = { GridItemSpan(2) }) {

@@ -93,7 +93,6 @@ private val WORKSPACE_TOOLS = listOf(
 @Composable
 fun A4WorkspaceScreen(
     viewModel: PrintReadyViewModel,
-    multiCard: Boolean,
     sourceMode: String,
     onBack: () -> Unit
 ) {
@@ -104,7 +103,7 @@ fun A4WorkspaceScreen(
     var pendingActionItemId by remember { mutableStateOf<String?>(null) }
     var showPrintSheet by remember { mutableStateOf(false) }
 
-    val pageLimitCount = state.selectedDocType?.sides ?: 1
+    val pageLimitCount = 30 // Allow up to 30 images for multi-page scanning
 
     val scannerOptions = remember(pageLimitCount) {
         GmsDocumentScannerOptions.Builder()
@@ -183,25 +182,12 @@ fun A4WorkspaceScreen(
                     }
                 },
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            state.selectedDocType?.name ?: "Workspace",
-                            style = MaterialTheme.typography.headlineMedium,
+                            text = state.selectedDocType?.name ?: "Workspace",
+                            style = MaterialTheme.typography.titleLarge,
                             color = Primary
                         )
-                        if (multiCard) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = SecondaryContainer
-                            ) {
-                                Text(
-                                    "Multi-Card",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = OnSecondaryContainer
-                                )
-                            }
-                        }
                     }
                 },
                 actions = {
@@ -267,24 +253,32 @@ fun A4WorkspaceScreen(
                         translationY = panOffset.y
                     }
                 ) {
-                    A4CanvasSheet(
-                        items = state.items,
-                        selectedItemId = state.selectedItemId,
-                        canvasGrayscale = state.canvasGrayscale,
-                        onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
-                        onItemMoved = { id, dx, dy -> viewModel.updateItemScaleAndPosition(id, 1f, dx, dy) },
-                        onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
-                        onItemSelected = { id ->
-                            val item = state.items.find { it.id == id }
-                            if (item?.imageUri == null) {
-                                pendingActionItemId = id
-                                if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
-                            } else {
-                                viewModel.selectItem(id)
-                            }
-                        },
-                        onCropClicked = { _, _ -> }
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(32.dp)
+                    ) {
+                        val maxPage = state.items.maxOfOrNull { it.pageIndex } ?: 0
+                        for (pageIndex in 0..maxPage) {
+                            A4CanvasSheet(
+                                items = state.items.filter { it.pageIndex == pageIndex },
+                                selectedItemId = state.selectedItemId,
+                                canvasGrayscale = state.canvasGrayscale,
+                                onDragStarted = { viewModel.pushUndoSnapshotForDrag() },
+                                onItemMoved = { id, dx, dy -> viewModel.updateItemScaleAndPosition(id, 1f, dx, dy) },
+                                onItemScaled = { id, scale, x, y, w, h -> viewModel.updateItemScaleAndPosition(id, scale, x, y, w, h) },
+                                onItemSelected = { id ->
+                                    val item = state.items.find { it.id == id }
+                                    if (item?.imageUri == null) {
+                                        pendingActionItemId = id
+                                        if (sourceMode == "gallery") startGalleryPick() else startMlKitScan()
+                                    } else {
+                                        viewModel.selectItem(id)
+                                    }
+                                },
+                                onCropClicked = { _, _ -> }
+                            )
+                        }
+                    }
                 }
             }
 

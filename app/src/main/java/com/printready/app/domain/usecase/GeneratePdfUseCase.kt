@@ -24,18 +24,23 @@ class GeneratePdfUseCase(private val context: Context) {
         val pageWidthPx = A4.WIDTH_PX
         val pageHeightPx = A4.HEIGHT_PX
 
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, 1).create()
-        val page = document.startPage(pageInfo)
-        val canvas: Canvas = page.canvas
+        val maxPage = job.items.maxOfOrNull { it.pageIndex } ?: 0
 
-        val bgPaint = Paint().apply { color = android.graphics.Color.WHITE }
-        canvas.drawRect(0f, 0f, pageWidthPx.toFloat(), pageHeightPx.toFloat(), bgPaint)
+        for (pageIndex in 0..maxPage) {
+            val pageInfo = PdfDocument.PageInfo.Builder(pageWidthPx, pageHeightPx, pageIndex + 1).create()
+            val page = document.startPage(pageInfo)
+            val canvas: Canvas = page.canvas
 
-        for (item in job.items) {
-            drawItem(canvas, item, job.grayscale)
+            val bgPaint = Paint().apply { color = android.graphics.Color.WHITE }
+            canvas.drawRect(0f, 0f, pageWidthPx.toFloat(), pageHeightPx.toFloat(), bgPaint)
+
+            val pageItems = job.items.filter { it.pageIndex == pageIndex }
+            for (item in pageItems) {
+                drawItem(canvas, item, job.grayscale)
+            }
+
+            document.finishPage(page)
         }
-
-        document.finishPage(page)
 
         FileOutputStream(outputFile).use { document.writeTo(it) }
         document.close()

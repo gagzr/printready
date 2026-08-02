@@ -21,7 +21,6 @@ data class WorkspaceUiState(
     val selectedItemId: String? = null,
     val marginPreset: MarginPreset = MarginPreset.NORMAL,
     val activeToolIndex: Int = 0,
-    val isMultiCard: Boolean = false,
     val pdfGenerating: Boolean = false,
     val pdfFile: File? = null,
     val errorMessage: String? = null,
@@ -104,10 +103,11 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
         _workspaceState.update { state ->
             val resetItems = state.items.mapIndexed { index, item ->
-                val (defaultX, defaultY) = calculateSkeletonPosition(index, state.items.size, item.documentType, marginMm)
+                val (pageIndex, defaultX, defaultY) = calculateSkeletonPosition(index, item.documentType, marginMm)
                 item.copy(
                     offsetXMm = defaultX,
                     offsetYMm = defaultY,
+                    pageIndex = pageIndex,
                     scaleFactor = 1f,
                     rotationDeg = 0f
                     // imageUri is strictly PRESERVED
@@ -132,35 +132,35 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun calculateSkeletonPosition(
         index: Int,
-        totalSides: Int,
         docType: DocumentType,
         marginMm: Float
-    ): Pair<Float, Float> {
+    ): Triple<Int, Float, Float> {
+        val pageIndex = index / docType.sides
+        val sideIndex = index % docType.sides
+
         return when {
             // 2-side IDs (Aadhar Card, Voter ID, DL):
             // Side 0 (Front) -> Top Left (marginMm, marginMm)
             // Side 1 (Back)  -> Top Right (A4.WIDTH_MM - marginMm - widthMm, marginMm)
-            totalSides == 2 -> {
-                if (index == 0) {
-                    Pair(marginMm, marginMm)
+            docType.sides == 2 && docType.category == DocumentCategory.ID -> {
+                if (sideIndex == 0) {
+                    Triple(pageIndex, marginMm, marginMm)
                 } else {
                     val rightX = (A4.WIDTH_MM - marginMm - docType.widthMm).coerceAtLeast(marginMm)
-                    Pair(rightX, marginMm)
+                    Triple(pageIndex, rightX, marginMm)
                 }
             }
             // 1-side IDs (PAN Card, Passport, etc.):
             // Top Center ((A4.WIDTH_MM - widthMm) / 2, marginMm)
-            totalSides == 1 -> {
+            docType.sides == 1 -> {
                 val centerX = ((A4.WIDTH_MM - docType.widthMm) / 2f).coerceAtLeast(marginMm)
-                Pair(centerX, marginMm)
+                Triple(pageIndex, centerX, marginMm)
             }
-            // General fallback for multiple items / multi-card:
+            // General fallback
             else -> {
-                val col = index % 2
-                val row = index / 2
-                val x = if (col == 0) marginMm else (A4.WIDTH_MM - marginMm - docType.widthMm).coerceAtLeast(marginMm)
-                val y = marginMm + row * (docType.heightMm + 10f)
-                Pair(x, y)
+                val y = marginMm + sideIndex * (docType.heightMm + 10f)
+                val x = marginMm
+                Triple(pageIndex, x, y)
             }
         }
     }
@@ -191,13 +191,14 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         val currentMargin = _workspaceState.value.marginPreset.mm
 
         val initialItems = List(type.sides) { index ->
-            val (startX, startY) = calculateSkeletonPosition(index, type.sides, type, currentMargin)
+            val (pageIndex, startX, startY) = calculateSkeletonPosition(index, type, currentMargin)
             CanvasItem(
                 id = UUID.randomUUID().toString(),
                 documentType = type,
                 imageUri = null,
                 offsetXMm = startX,
-                offsetYMm = startY
+                offsetYMm = startY,
+                pageIndex = pageIndex
             )
         }
 
@@ -238,23 +239,20 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
                 )
                 s.copy(items = newItems)
             } else {
-                if (s.isMultiCard) {
-                     val docType = s.selectedDocType ?: DefaultDocumentTypes.first()
-                     val itemsCount = s.items.size
-                     val (newX, newY) = calculateSkeletonPosition(itemsCount, itemsCount + 1, docType, s.marginPreset.mm)
-                     val isDoc = docType.category == DocumentCategory.DOCUMENT || docType.category == DocumentCategory.CUSTOM
-                     val item = CanvasItem(
-                         id = UUID.randomUUID().toString(),
-                         documentType = docType,
-                         imageUri = uri,
-                         offsetXMm = newX,
-                         offsetYMm = newY,
-                         overrideAspectRatio = if (isDoc) aspectRatio else null
-                     )
-                     s.copy(items = s.items + item)
-                } else {
-                     s
-                }
+                val docType = s.selectedDocType ?: DefaultDocumentTypes.first()
+                val itemsCount = s.items.size
+                val (pageIndex, newX, newY) = calculateSkeletonPosition(itemsCount, docType, s.marginPreset.mm)
+                val isDoc = docType.category == DocumentCategory.DOCUMENT || docType.category == DocumentCategory.CUSTOM
+                val item = CanvasItem(
+                    id = UUID.randomUUID().toString(),
+                    documentType = docType,
+                    imageUri = uri,
+                    offsetXMm = newX,
+                    offsetYMm = newY,
+                    overrideAspectRatio = if (isDoc) aspectRatio else null,
+                    pageIndex = pageIndex
+                )
+                s.copy(items = s.items + item)
             }
         }
     }
@@ -283,8 +281,8 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         pushUndoSnapshot()
         _workspaceState.update { state ->
             val updatedItems = state.items.mapIndexed { index, item ->
-                val (newX, newY) = calculateSkeletonPosition(index, state.items.size, item.documentType, preset.mm)
-                item.copy(offsetXMm = newX, offsetYMm = newY)
+                val (pageIndex, newX, newY) = calculateSkeletonPosition(index, item.documentType, preset.mm)
+                item.copy(offsetXMm = newX, offsetYMm = newY, pageIndex = pageIndex)
             }
             state.copy(marginPreset = preset, items = updatedItems)
         }
@@ -292,10 +290,6 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
 
     fun setActiveTool(index: Int) {
         _workspaceState.update { it.copy(activeToolIndex = index) }
-    }
-
-    fun toggleMultiCard() {
-        _workspaceState.update { it.copy(isMultiCard = !it.isMultiCard) }
     }
 
     fun generatePdf() {
@@ -347,11 +341,12 @@ class PrintReadyViewModel(application: Application) : AndroidViewModel(applicati
         pushUndoSnapshot()
         _workspaceState.update { state ->
             state.copy(items = state.items.mapIndexed { index, item ->
-                val (newX, newY) = calculateSkeletonPosition(index, state.items.size, item.documentType, marginMm)
+                val (pageIndex, newX, newY) = calculateSkeletonPosition(index, item.documentType, marginMm)
                 item.copy(
                     scaleFactor = 1f,
                     offsetXMm = newX,
-                    offsetYMm = newY
+                    offsetYMm = newY,
+                    pageIndex = pageIndex
                 )
             })
         }

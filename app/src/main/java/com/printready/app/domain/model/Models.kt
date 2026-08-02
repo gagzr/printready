@@ -48,7 +48,8 @@ data class CanvasItem(
     // Image adjustments — non-destructive, applied at render time
     val brightness: Float = 0f,   // -1f (black) .. 0f (neutral) .. 1f (white)
     val contrast: Float = 1f,     // 0.5f (flat) .. 1f (neutral) .. 2f (punchy)
-    val grayscale: Boolean = false
+    val grayscale: Boolean = false,
+    val pageIndex: Int = 0
 )
 
 data class PrintJob(

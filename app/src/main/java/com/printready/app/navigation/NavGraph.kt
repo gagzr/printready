@@ -32,11 +32,11 @@ fun PrintReadyNavGraph() {
                 onNewGallery = { navController.navigate("select_doc_type/gallery") },
                 onPresetSelected = { docType ->
                     viewModel.selectDocumentType(docType)
-                    navController.navigate("workspace/false/scan")
+                    navController.navigate("workspace/scan")
                 },
                 onRecentJobClick = { job ->
                     viewModel.loadPrintJob(job)
-                    navController.navigate("workspace/false/scan")
+                    navController.navigate("workspace/scan")
                 }
             )
         }
@@ -50,24 +50,24 @@ fun PrintReadyNavGraph() {
                 onBack = { navController.popBackStack() },
                 onDocTypeSelected = { docType ->
                     viewModel.selectDocumentType(docType)
-                    navController.navigate("workspace/false/$sourceMode")
+                    navController.navigate("workspace/$sourceMode")
                 }
             )
         }
         composable(
-            "workspace/{multiCard}/{sourceMode}",
+            "workspace/{sourceMode}",
             arguments = listOf(
-                navArgument("multiCard") { type = NavType.BoolType },
                 navArgument("sourceMode") { type = NavType.StringType }
             )
         ) { backStack ->
-            val multiCard = backStack.arguments?.getBoolean("multiCard") ?: false
             val sourceMode = backStack.arguments?.getString("sourceMode") ?: "scan"
             A4WorkspaceScreen(
                 viewModel = viewModel,
-                multiCard = multiCard,
                 sourceMode = sourceMode,
-                onBack = { navController.popBackStack() }
+                onBack = {
+                    viewModel.resetLayout()
+                    navController.popBackStack("dashboard", inclusive = false)
+                }
             )
         }
     }
